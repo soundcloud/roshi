@@ -4,80 +4,48 @@ import (
 	"fmt"
 )
 
-type StatType int
-
-const (
-	Counting StatType = iota
-	Timing
-	Gauge
-)
-
-type stat struct {
-	statType     StatType
-	sampled      bool
-	samplingRate float32
-}
-
-func (st *stat) setSamplingRate(samplingRate float32) error {
-	if samplingRate <= 0.0 || samplingRate > 1.0 {
-		return fmt.Errorf("%.2f: must be 0 < rate <= 1.0", samplingRate)
-	}
-	st.sampled = true
-	st.samplingRate = samplingRate
-	return nil
-}
-
-//
-//
-//
-
-type registration struct {
-	bucket   string
-	statType StatType
-	err      chan error
-}
-
-//
-//
-//
-
-type samplingChange struct {
-	bucket       string
-	samplingRate float32
-	err          chan error
-}
-
-//
-//
-//
-
-type update interface {
+type sendable interface {
 	Message() string
+}
+
+type sampling struct {
+	enabled bool
+	rate    float32
+}
+
+func (s *sampling) Suffix() string {
+	if s.enabled {
+		return fmt.Sprintf("|@%f", s.rate)
+	}
+	return ""
 }
 
 type counterUpdate struct {
 	bucket string
 	n      int
+	sampling
 }
 
 func (u *counterUpdate) Message() string {
-	return fmt.Sprintf("%s:%d|c", u.bucket, u.n)
+	return fmt.Sprintf("%s:%d|c%s", u.bucket, u.n, u.sampling.Suffix())
 }
 
 type timingUpdate struct {
 	bucket string
 	ms     int
+	sampling
 }
 
 func (u *timingUpdate) Message() string {
-	return fmt.Sprintf("%s:%d|ms", u.bucket, u.ms)
+	return fmt.Sprintf("%s:%d|ms%s", u.bucket, u.ms, u.sampling.Suffix())
 }
 
 type gaugeUpdate struct {
 	bucket string
 	val    string
+	sampling
 }
 
 func (u *gaugeUpdate) Message() string {
-	return fmt.Sprintf("%s:%s|g", u.bucket, u.val)
+	return fmt.Sprintf("%s:%s|g%s", u.bucket, u.val, u.sampling.Suffix())
 }

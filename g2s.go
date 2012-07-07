@@ -1,7 +1,6 @@
 package g2s
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"strings"
@@ -14,14 +13,11 @@ import (
 
 type Statsd struct {
 	connection net.Conn
-	stats      map[string]*stat
 	interval   time.Duration
 	outgoing   []string
 
-	registrations   chan registration
-	samplingChanges chan samplingChange
-	updates         chan update
-	shutdown        chan chan bool
+	messages chan sendable
+	shutdown chan chan bool
 }
 
 func NewStatsd(endpoint string, interval time.Duration) (*Statsd, error) {
@@ -31,58 +27,73 @@ func NewStatsd(endpoint string, interval time.Duration) (*Statsd, error) {
 	}
 	s := &Statsd{
 		connection: connection,
-		stats:      map[string]*stat{},
 		interval:   interval,
 		outgoing:   []string{},
 
-		registrations:   make(chan registration),
-		samplingChanges: make(chan samplingChange),
-		updates:         make(chan update),
-		shutdown:        make(chan chan bool),
+		messages: make(chan sendable),
+		shutdown: make(chan chan bool),
 	}
 	go s.loop()
 	return s, nil
 }
 
-func (s *Statsd) Register(bucket string, statType StatType) error {
-	r := registration{
-		bucket:   bucket,
-		statType: statType,
-		err:      make(chan error),
-	}
-	s.registrations <- r
-	return <-r.err
-}
-
-func (s *Statsd) SetSamplingRate(bucket string, samplingRate float32) error {
-	c := samplingChange{
-		bucket:       bucket,
-		samplingRate: samplingRate,
-		err:          make(chan error),
-	}
-	s.samplingChanges <- c
-	return <-c.err
-}
-
 func (s *Statsd) IncrementCounter(bucket string, n int) {
-	s.updates <- &counterUpdate{
+	s.messages <- &counterUpdate{
 		bucket: bucket,
 		n:      n,
 	}
 }
 
+func (s *Statsd) IncrementSampledCounter(bucket string, n int, srate float32) {
+	s.messages <- &counterUpdate{
+		bucket: bucket,
+		n:      n,
+		sampling: sampling{
+			enabled: true,
+			rate:    srate,
+		},
+	}
+}
+
 func (s *Statsd) SendTiming(bucket string, ms int) {
-	s.updates <- &timingUpdate{
+	s.messages <- &timingUpdate{
 		bucket: bucket,
 		ms:     ms,
 	}
 }
 
-func (s *Statsd) UpdateGauge(bucket string, val string) {
-	s.updates <- &gaugeUpdate{
+func (s *Statsd) SendSampledTiming(bucket string, ms int, srate float32) {
+	s.messages <- &timingUpdate{
+		bucket: bucket,
+		ms:     ms,
+		sampling: sampling{
+			enabled: true,
+			rate:    srate,
+		},
+	}
+}
+
+func (s *Statsd) UpdateGauge(bucket, val string) {
+	s.messages <- &gaugeUpdate{
 		bucket: bucket,
 		val:    val,
 	}
+}
+func (s *Statsd) UpdateSampledGauge(bucket, val string, srate float32) {
+	s.messages <- &gaugeUpdate{
+		bucket: bucket,
+		val:    val,
+		sampling: sampling{
+			enabled: true,
+			rate:    srate,
+		},
+	}
+}
+
+func (s *Statsd) Shutdown() {
+	q := make(chan bool)
+	s.shutdown <- q
+	<-q
 }
 
 func (s *Statsd) loop() {
@@ -90,12 +101,8 @@ func (s *Statsd) loop() {
 	defer ticker.Stop()
 	for {
 		select {
-		case r := <-s.registrations:
-			r.err <- s.register(r.bucket, r.statType)
-		case c := <-s.samplingChanges:
-			c.err <- s.changeSampling(c.bucket, c.samplingRate)
-		case u := <-s.updates:
-			s.outgoing = append(s.outgoing, u.Message())
+		case sendable := <-s.messages:
+			s.outgoing = append(s.outgoing, sendable.Message())
 		case <-ticker.C:
 			s.publish()
 		case q := <-s.shutdown:
@@ -103,24 +110,6 @@ func (s *Statsd) loop() {
 			return
 		}
 	}
-}
-
-func (s *Statsd) register(bucket string, statType StatType) error {
-	if _, ok := s.stats[bucket]; ok {
-		return fmt.Errorf("%s: already registered", bucket)
-	}
-	s.stats[bucket] = &stat{
-		statType: statType,
-	}
-	return nil
-}
-
-func (s *Statsd) changeSampling(bucket string, samplingRate float32) error {
-	st, ok := s.stats[bucket]
-	if !ok {
-		return fmt.Errorf("%s: not registered", bucket)
-	}
-	return st.setSamplingRate(samplingRate)
 }
 
 // publish attempts to send all the updates that have been collected since
