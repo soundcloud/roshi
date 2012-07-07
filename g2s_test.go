@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"time"
+	"math/rand"
 )
 
 func TestPublish1(t *testing.T) {
@@ -75,6 +76,37 @@ func TestPublishManyPackets(t *testing.T) {
 	mock.Shutdown()
 }
 
+func TestLoad(t *testing.T) {
+	d := 25 * time.Millisecond
+	mock := NewMockStatsd(t, 12345)
+	sd, err := NewStatsd("localhost:12345", d)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	sends := 1234 // careful: too high, and we take >d ms to send
+	for i := 0; i < sends; i++ {
+		bucket := fmt.Sprintf("bucket-%02d", i%23)
+		n := rand.Intn(100)
+		sd.SendTiming(bucket, n)
+	}
+	time.Sleep(2 * d)
+
+	expectedLines := sends
+	if lines := mock.Lines(); lines != expectedLines {
+		t.Errorf("expected %d lines, got %d", expectedLines, lines)
+	}
+	expectedPackets := sends / MessagesPerPacket
+	if sends%MessagesPerPacket != 0 {
+		expectedPackets++
+	}
+	if packets := mock.Packets(); packets != expectedPackets {
+		t.Errorf("expected %d packets, got %d", expectedPackets, packets)
+	}
+
+	mock.Shutdown()
+}
+
 //
 //
 //
@@ -125,16 +157,11 @@ func (m *MockStatsd) loop() {
 		panic(err)
 	}
 	m.ln = ln
-	b := make([]byte, 1024)
+	b := make([]byte, 1024*1024)
 	for {
 		n, _, err := m.ln.ReadFrom(b)
 		if err != nil {
 			m.t.Logf("Mock Statsd: read error: %s", err)
-			m.done <- true
-			return
-		}
-		if n > 256 {
-			m.t.Errorf("Mock Statsd: read %dB: too much data", n)
 			m.done <- true
 			return
 		}

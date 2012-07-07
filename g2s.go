@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-//
-//
-//
+const (
+	MessagesPerPacket = 100
+)
 
 type Statsd struct {
 	connection net.Conn
@@ -116,7 +116,7 @@ func (s *Statsd) loop() {
 // the last publish to the statsd server. It batches updates into packets of
 // 100 messages. Failures are logged but not retried.
 func (s *Statsd) publish() {
-	// split outgoing messages into packets of 100 messages
+	// split outgoing messages into packets of N messages
 	buffer, packets := []string{}, []string{}
 	fold := func() {
 		packets = append(packets, strings.Join(buffer, "\n")+"\n")
@@ -124,7 +124,7 @@ func (s *Statsd) publish() {
 	}
 	for _, msg := range s.outgoing {
 		buffer = append(buffer, msg)
-		if len(buffer) >= 100 {
+		if len(buffer) >= MessagesPerPacket {
 			fold()
 		}
 	}
