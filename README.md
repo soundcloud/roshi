@@ -1,4 +1,4 @@
-# g2g
+# g2s
 
 Get to Statsd: forward simple statistics to a statsd server.
 
@@ -17,7 +17,7 @@ Updates are accumulated and sent to the statsd server in batches according to
 the interval parameter. A relatively low interval (1s) is recommended.
 
 ```go
-sd, err := g2s.NewStatsd("stats-server:8125", 1*time.Second)
+sd, err := g2s.NewStatsd("statsd-server:8125", 1*time.Second)
 if err != nil {
 	// do something
 }
