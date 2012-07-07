@@ -114,9 +114,9 @@ func (s *Statsd) loop() {
 
 // publish attempts to send all the updates that have been collected since
 // the last publish to the statsd server. It batches updates into packets of
-// 100 messages. Failures are logged but not retried.
+// MessagesPerPacket messages. Failures are logged but not retried.
 func (s *Statsd) publish() {
-	// split outgoing messages into packets of N messages
+	// combine outgoing messages into packets
 	buffer, packets := []string{}, []string{}
 	fold := func() {
 		packets = append(packets, strings.Join(buffer, "\n")+"\n")
