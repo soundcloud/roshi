@@ -1,16 +1,2 @@
-language: erlang # wither art thou, Go?
-
-install:
- - hg clone -r go1.0.2 https://code.google.com/p/go $HOME/go
- - cd $HOME/go/src && ./make.bash
- - mkdir -p $HOME/src || true
- - mkdir -p $HOME/bin || true
- - mkdir -p $HOME/pkg || true
- - export GOPATH=$HOME
- - export PATH=$PATH:$HOME/go/bin
- - ln -s $HOME/builds/peterbourgon/g2s $HOME/src/g2s
-
-script:
- - cd $HOME/src/g2s && pwd && echo $GOPATH && go build -v .
- - cd $HOME/src/g2s && pwd && echo $GOPATH && go test -v .
+language: go
 
