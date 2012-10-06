@@ -89,6 +89,7 @@ func NewMockStatsd(t *testing.T, port int) *MockStatsd {
 		done: make(chan bool, 1),
 	}
 	go m.loop()
+	time.Sleep(25 * time.Millisecond) // for travis
 	return m
 }
 
