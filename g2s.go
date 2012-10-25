@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-const (
-	MessagesPerPacket = 100
-)
-
 type Statsd struct {
 	connection net.Conn
 }

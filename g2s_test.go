@@ -12,6 +12,8 @@ import (
 
 func TestPublish1(t *testing.T) {
 	mock := NewMockStatsd(t, 12345)
+	defer mock.Shutdown()
+
 	sd, err := NewStatsd("localhost:12345")
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -20,15 +22,15 @@ func TestPublish1(t *testing.T) {
 	sd.IncrementCounter("foo", 1)
 	time.Sleep(25 * time.Millisecond)
 
-	if lines := mock.Lines(); lines != 1 {
-		t.Errorf("expected 1 line, got %d", lines)
+	if expected, got := 1, mock.Lines(); expected != got {
+		t.Errorf("expected %d, got %d", expected, got)
 	}
-
-	mock.Shutdown()
 }
 
 func TestPublishMany(t *testing.T) {
 	mock := NewMockStatsd(t, 12345)
+	defer mock.Shutdown()
+
 	sd, err := NewStatsd("localhost:12345")
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -39,15 +41,15 @@ func TestPublishMany(t *testing.T) {
 	sd.UpdateGauge("baz", "green")
 	time.Sleep(25 * time.Millisecond)
 
-	if lines := mock.Lines(); lines != 3 {
-		t.Errorf("expected 3 lines, got %d", lines)
+	if expected, got := 3, mock.Lines(); expected != got {
+		t.Errorf("expected %d, got %d", expected, got)
 	}
-
-	mock.Shutdown()
 }
 
 func TestLoad(t *testing.T) {
 	mock := NewMockStatsd(t, 12345)
+	defer mock.Shutdown()
+
 	sd, err := NewStatsd("localhost:12345")
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -61,12 +63,10 @@ func TestLoad(t *testing.T) {
 	}
 	time.Sleep(50 * time.Millisecond)
 
-	expectedLines := sends
-	if lines := mock.Lines(); lines != expectedLines {
-		t.Errorf("expected %d lines, got %d", expectedLines, lines)
+	if expected, got := sends, mock.Lines(); expected != got {
+		t.Errorf("expected %d, got %d", expected, got)
 	}
 
-	mock.Shutdown()
 }
 
 //
@@ -109,17 +109,20 @@ func (m *MockStatsd) loop() {
 	if err != nil {
 		panic(err)
 	}
+
 	ln, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
 		panic(err)
 	}
+
 	m.ln = ln
 	b := make([]byte, 1024*1024)
+	defer func() { m.done <- true }()
+
 	for {
 		n, _, err := m.ln.ReadFrom(b)
 		if err != nil {
 			m.t.Logf("Mock Statsd: read error: %s", err)
-			m.done <- true
 			return
 		}
 		s := strings.TrimSpace(string(b[:n]))
