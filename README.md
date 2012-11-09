@@ -13,9 +13,6 @@ g2s provides a Statsd object, which provides some convenience functions for
 each of the supported statsd statistic-types. Just call the relevant function
 on the Statsd object wherever it makes sense in your code.
 
-Updates are accumulated and sent to the statsd server in batches according to
-the interval parameter. A relatively low interval (1s) is recommended.
-
 ```go
 sd, err := g2s.NewStatsd("statsd-server:8125", 1*time.Second)
 if err != nil {
@@ -28,4 +25,5 @@ sd.SendSampledTiming("my.silly.fast-process", 7, 0.1)
 sd.UpdateGauge("my.silly.status", "green")
 ```
 
-All 'update'-class functions are goroutine safe, and should return immediately.
+All 'update'-class functions are goroutine safe. They should return quickly,
+but they're safe to fire in a seperate goroutine.
