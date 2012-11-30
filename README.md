@@ -14,16 +14,17 @@ each of the supported statsd statistic-types. Just call the relevant function
 on the Statsd object wherever it makes sense in your code.
 
 ```go
-sd, err := g2s.NewStatsd("statsd-server:8125")
+s, err := g2s.Dial("udp", "statsd-server:8125")
 if err != nil {
 	// do something
 }
 
-sd.IncrementCounter("my.silly.counter", 1)
-sd.SendTiming("my.silly.slow-process", 534)
-sd.SendSampledTiming("my.silly.fast-process", 7, 0.1)
-sd.UpdateGauge("my.silly.status", "green")
+s.Counter(1.0, "my.silly.counter", 1)
+s.Timing(1.0, "my.silly.slow-process", 534*time.Millisecond)
+s.Timing(0.2, "my.silly.fast-process", 7*time.Millisecond)
+s.Gauge(1.0, "my.silly.status", "green")
 ```
 
-All 'update'-class functions are goroutine safe. They should return quickly,
-but they're safe to fire in a seperate goroutine.
+If you use a standard UDP connection to a statsd server, all 'update'-class
+functions are goroutine safe. They should return quickly, but they're safe to
+fire in a seperate goroutine.
