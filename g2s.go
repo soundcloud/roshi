@@ -139,7 +139,7 @@ func (s *Statsd) Timing(sampleRate float32, bucket string, d ...time.Duration) {
 	for i, di := range d {
 		msgs[i] = &timingUpdate{
 			bucket:   bucket,
-			ms:       int(di.Nanoseconds() / 1e9),
+			ms:       int(di.Nanoseconds() / 1e6),
 			sampling: samp,
 		}
 	}

@@ -1,134 +1,120 @@
 package g2s
 
 import (
-	"fmt"
+	"bytes"
 	"math/rand"
-	"net"
+	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
 
-func TestPublish1(t *testing.T) {
-	mock := NewMockStatsd(t, 12345)
-	defer mock.Shutdown()
-
-	sd, err := NewStatsd("localhost:12345")
+func TestCounter(t *testing.T) {
+	b := &bytes.Buffer{}
+	s, err := New(b)
 	if err != nil {
-		t.Fatalf("%s", err)
+		t.Fatal(err)
 	}
 
-	sd.IncrementCounter("foo", 1)
-	time.Sleep(25 * time.Millisecond)
+	s.Counter(1.0, "gorets", 1)
 
-	if expected, got := 1, mock.Lines(); expected != got {
-		t.Errorf("expected %d, got %d", expected, got)
+	if expected, got := "gorets:1|c\n", b.String(); expected != got {
+		t.Errorf("expected '%s', got '%s'", expected, got)
 	}
 }
 
-func TestPublishMany(t *testing.T) {
-	mock := NewMockStatsd(t, 12345)
-	defer mock.Shutdown()
-
-	sd, err := NewStatsd("localhost:12345")
+func TestTiming(t *testing.T) {
+	b := &bytes.Buffer{}
+	s, err := New(b)
 	if err != nil {
-		t.Fatalf("%s", err)
+		t.Fatal(err)
 	}
 
-	sd.IncrementCounter("foo", 1)
-	sd.SendSampledTiming("bar", 201, 0.1)
-	sd.UpdateGauge("baz", "green")
-	time.Sleep(25 * time.Millisecond)
+	s.Timing(1.0, "glork", 320*time.Millisecond)
 
-	if expected, got := 3, mock.Lines(); expected != got {
-		t.Errorf("expected %d, got %d", expected, got)
+	if expected, got := "glork:320|ms\n", b.String(); expected != got {
+		t.Errorf("expected '%s', got '%s'", expected, got)
 	}
 }
 
-func TestLoad(t *testing.T) {
-	mock := NewMockStatsd(t, 12345)
-	defer mock.Shutdown()
-
-	sd, err := NewStatsd("localhost:12345")
+func TestGauge(t *testing.T) {
+	b := &bytes.Buffer{}
+	s, err := New(b)
 	if err != nil {
-		t.Fatalf("%s", err)
+		t.Fatal(err)
 	}
 
-	sends := 1234 // careful: too high, and we take too long to send
-	for i := 0; i < sends; i++ {
-		bucket := fmt.Sprintf("bucket-%02d", i%23)
-		n := rand.Intn(100)
-		sd.SendTiming(bucket, n)
+	s.Gauge(1.0, "gaugor", "333")
+
+	if expected, got := "gaugor:333|g\n", b.String(); expected != got {
+		t.Errorf("expected '%s', got '%s'", expected, got)
 	}
-	time.Sleep(50 * time.Millisecond)
-
-	if expected, got := sends, mock.Lines(); expected != got {
-		t.Errorf("expected %d, got %d", expected, got)
-	}
-
 }
 
-//
-//
-//
-
-type MockStatsd struct {
-	t     *testing.T
-	port  int
-	lines int
-	mtx   sync.Mutex
-	ln    *net.UDPConn
-	done  chan bool
-}
-
-func NewMockStatsd(t *testing.T, port int) *MockStatsd {
-	m := &MockStatsd{
-		t:    t,
-		port: port,
-		done: make(chan bool, 1),
-	}
-	go m.loop()
-	time.Sleep(25 * time.Millisecond) // for travis
-	return m
-}
-
-func (m *MockStatsd) Lines() int {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-	return m.lines
-}
-
-func (m *MockStatsd) Shutdown() {
-	m.ln.Close()
-	<-m.done
-}
-
-func (m *MockStatsd) loop() {
-	udpAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("localhost:%d", m.port))
+func TestMany(t *testing.T) {
+	b := &bytes.Buffer{}
+	s, err := New(b)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	ln, err := net.ListenUDP("udp", udpAddr)
+	s.Counter(1.0, "foo", 1, 2, 3)
+	s.Timing(1.0, "bar", 4*time.Millisecond, 5*time.Millisecond)
+
+	expected := "foo:1|c\nfoo:2|c\nfoo:3|c\nbar:4|ms\nbar:5|ms\n"
+	got := b.String()
+	if expected != got {
+		t.Errorf("expected '%s', got '%s'", expected, got)
+	}
+}
+
+func TestSamplingZero(t *testing.T) {
+	b := &bytes.Buffer{}
+	s, err := New(b)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	m.ln = ln
-	b := make([]byte, 1024*1024)
-	defer func() { m.done <- true }()
+	s.Counter(0.0, "nobucket", 1) // should never succeed
 
-	for {
-		n, _, err := m.ln.ReadFrom(b)
-		if err != nil {
-			m.t.Logf("Mock Statsd: read error: %s", err)
-			return
-		}
-		s := strings.TrimSpace(string(b[:n]))
-		m.t.Logf("Mock Statsd: read %dB: %s", n, s)
-		m.mtx.Lock()
-		m.lines += len(strings.Split(s, "\n"))
-		m.mtx.Unlock()
+	if expected, got := "", b.String(); expected != got {
+		t.Errorf("expected '%s', got '%s'", expected, got)
 	}
+}
+
+func TestSampling(t *testing.T) {
+	b := &bytes.Buffer{}
+	s, err := New(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rate, n := float32(0.5), 10000
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < n; i++ {
+		s.Counter(rate, "foo", 1)
+	}
+
+	middle, threshold := n/2, n/10
+	expectedMin, expectedMax := middle-threshold, middle+threshold
+	got := strings.Split(b.String(), "\n")
+
+	rateToks := strings.Split(got[0], "@")
+	if len(rateToks) != 2 {
+		t.Fatalf("splitting packet on '@': expected 2, got %d", len(rateToks))
+	}
+	gotRate, err := strconv.ParseFloat(rateToks[1], 32)
+	if err != nil {
+		t.Fatalf("%s: %s", rateToks[1], err)
+	}
+	if float32(gotRate) != rate {
+		t.Errorf("sampling rate: expected %f, got %f", rate, gotRate)
+	}
+
+	packetCount := len(got)
+	if packetCount < expectedMin || packetCount > expectedMax {
+		t.Errorf("got %d packets, but expected between %d and %d", packetCount, expectedMin, expectedMax)
+	}
+
+	t.Logf("got %d < %d < %d OK", expectedMin, packetCount, expectedMax)
 }
