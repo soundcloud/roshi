@@ -14,7 +14,7 @@ each of the supported statsd statistic-types. Just call the relevant function
 on the Statsd object wherever it makes sense in your code.
 
 ```go
-sd, err := g2s.NewStatsd("statsd-server:8125", 1*time.Second)
+sd, err := g2s.NewStatsd("statsd-server:8125")
 if err != nil {
 	// do something
 }
