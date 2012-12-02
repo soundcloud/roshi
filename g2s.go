@@ -18,7 +18,7 @@ type Statter interface {
 	Gauge(sampleRate float32, bucket string, value ...string)
 }
 
-type Statsd struct {
+type statsd struct {
 	w io.Writer
 }
 
@@ -27,7 +27,7 @@ type Statsd struct {
 // ready to use.
 //
 // Note that g2s currently performs no management on the connection it creates.
-func Dial(proto, endpoint string) (*Statsd, error) {
+func Dial(proto, endpoint string) (Statter, error) {
 	c, err := net.DialTimeout(proto, endpoint, 2*time.Second)
 	if err != nil {
 		return nil, err
@@ -43,8 +43,8 @@ func Dial(proto, endpoint string) (*Statsd, error) {
 // Note that g2s provides no synchronization. If you pass an io.Writer which
 // is not goroutine-safe, for example a bytes.Buffer, you must make sure you
 // synchronize your calls to the Statter methods.
-func New(w io.Writer) (*Statsd, error) {
-	return &Statsd{
+func New(w io.Writer) (Statter, error) {
+	return &statsd{
 		w: w,
 	}, nil
 }
@@ -75,7 +75,7 @@ func bufferize(sendables []sendable, max int) [][]byte {
 // publish folds the slice of sendables into one or more packets, each of which
 // will be no larger than MAX_PACKET_SIZE. It then writes them, one by one,
 // into the Statsd io.Writer.
-func (s *Statsd) publish(msgs []sendable) {
+func (s *statsd) publish(msgs []sendable) {
 	for _, buf := range bufferize(msgs, MAX_PACKET_SIZE) {
 		// In the base case, when the Statsd struct is backed by a net.Conn,
 		// "Multiple goroutines may invoke methods on a Conn simultaneously."
@@ -116,7 +116,7 @@ func maybeSample(r float32) (sampling, bool) {
 // Application code should call it for every potential invocation of a
 // statistic; it uses the sampleRate to determine whether or not to send or
 // squelch the data, on an aggregate basis.
-func (s *Statsd) Counter(sampleRate float32, bucket string, n ...int) {
+func (s *statsd) Counter(sampleRate float32, bucket string, n ...int) {
 	samp, ok := maybeSample(sampleRate)
 	if !ok {
 		return
@@ -139,7 +139,7 @@ func (s *Statsd) Counter(sampleRate float32, bucket string, n ...int) {
 // Application code should call it for every potential invocation of a
 // statistic; it uses the sampleRate to determine whether or not to send or
 // squelch the data, on an aggregate basis.
-func (s *Statsd) Timing(sampleRate float32, bucket string, d ...time.Duration) {
+func (s *statsd) Timing(sampleRate float32, bucket string, d ...time.Duration) {
 	samp, ok := maybeSample(sampleRate)
 	if !ok {
 		return
@@ -162,7 +162,7 @@ func (s *Statsd) Timing(sampleRate float32, bucket string, d ...time.Duration) {
 // Application code should call it for every potential invocation of a
 // statistic; it uses the sampleRate to determine whether or not to send or
 // squelch the data, on an aggregate basis.
-func (s *Statsd) Gauge(sampleRate float32, bucket string, v ...string) {
+func (s *statsd) Gauge(sampleRate float32, bucket string, v ...string) {
 	samp, ok := maybeSample(sampleRate)
 	if !ok {
 		return
