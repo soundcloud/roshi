@@ -50,8 +50,7 @@ func New(w io.Writer) (*Statsd, error) {
 }
 
 // bufferize folds the slice of sendables into a slice of byte-buffers,
-// each of which shall be no larger than max bytes. Each byte buffer is
-// guaranteed to end with '\n'.
+// each of which shall be no larger than max bytes.
 func bufferize(sendables []sendable, max int) [][]byte {
 	bN := [][]byte{}
 	b1, b1sz := []byte{}, 0
@@ -60,9 +59,7 @@ func bufferize(sendables []sendable, max int) [][]byte {
 		buf := []byte(sendable.Message())
 		if b1sz+len(buf) > max {
 			bN = append(bN, b1)
-			b1 = buf
-			b1sz = len(buf)
-			continue
+			b1, b1sz = []byte{}, 0
 		}
 		b1 = append(b1, buf...)
 		b1sz += len(buf)
@@ -75,12 +72,15 @@ func bufferize(sendables []sendable, max int) [][]byte {
 	return bN
 }
 
+// publish folds the slice of sendables into one or more packets, each of which
+// will be no larger than MAX_PACKET_SIZE. It then writes them, one by one,
+// into the Statsd io.Writer.
 func (s *Statsd) publish(msgs []sendable) {
 	for _, buf := range bufferize(msgs, MAX_PACKET_SIZE) {
-		// In the base case, "Multiple goroutines may invoke methods on a Conn
-		// simultaneously." -- http://golang.org/pkg/net/#Conn
-		//
-		// ...otherwise, Bring Your Own Synchronization.
+		// In the base case, when the Statsd struct is backed by a net.Conn,
+		// "Multiple goroutines may invoke methods on a Conn simultaneously."
+		//   -- http://golang.org/pkg/net/#Conn
+		// Otherwise, Bring Your Own Synchronization™.
 		n, err := s.w.Write(buf)
 		if err != nil {
 			log.Printf("g2s: publish: %s", err)
@@ -111,6 +111,11 @@ func maybeSample(r float32) (sampling, bool) {
 	}, true
 }
 
+// Counter sends one or more counter statistics to statsd.
+//
+// Application code should call it for every potential invocation of a
+// statistic; it uses the sampleRate to determine whether or not to send or
+// squelch the data, on an aggregate basis.
 func (s *Statsd) Counter(sampleRate float32, bucket string, n ...int) {
 	samp, ok := maybeSample(sampleRate)
 	if !ok {
@@ -129,6 +134,11 @@ func (s *Statsd) Counter(sampleRate float32, bucket string, n ...int) {
 	s.publish(msgs)
 }
 
+// Timing sends one or more timing statistics to statsd.
+//
+// Application code should call it for every potential invocation of a
+// statistic; it uses the sampleRate to determine whether or not to send or
+// squelch the data, on an aggregate basis.
 func (s *Statsd) Timing(sampleRate float32, bucket string, d ...time.Duration) {
 	samp, ok := maybeSample(sampleRate)
 	if !ok {
@@ -147,6 +157,11 @@ func (s *Statsd) Timing(sampleRate float32, bucket string, d ...time.Duration) {
 	s.publish(msgs)
 }
 
+// Gauge sends one or more gauge statistics to statsd.
+//
+// Application code should call it for every potential invocation of a
+// statistic; it uses the sampleRate to determine whether or not to send or
+// squelch the data, on an aggregate basis.
 func (s *Statsd) Gauge(sampleRate float32, bucket string, v ...string) {
 	samp, ok := maybeSample(sampleRate)
 	if !ok {
