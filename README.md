@@ -28,3 +28,8 @@ s.Gauge(1.0, "my.silly.status", "green")
 If you use a standard UDP connection to a statsd server, all 'update'-class
 functions are goroutine safe. They should return quickly, but they're safe to
 fire in a seperate goroutine.
+
+# Upgrading API
+
+Upgrade to the latest API by running `./fix.bash *.go` where `*.go` expands to
+the paths of the source files you'd like to rewrite to the new API.
