@@ -10,12 +10,16 @@ func (n noStatsd) Counter(float32, string, ...int)          {}
 func (n noStatsd) Timing(float32, string, ...time.Duration) {}
 func (n noStatsd) Gauge(float32, string, ...string)         {}
 
-// SafeDial attempts to Dial the given proto and endpoint, just like Dial.
-// If that Dial fails for any reason, SafeDial is different in that it returns
-// a valid Statter whose methods will return without doing anything.
-func SafeDial(proto, endpoint string) Statter {
-	if yesStatsd, err := Dial(proto, endpoint); err == nil {
-		return yesStatsd
-	}
+// Noop returns a struct that satisfies the Statter interface but silently
+// ignores all Statter method invocations. It's designed to be used when normal
+// g2s construction fails, eg.
+//
+//    s, err := g2s.Dial("udp", someEndpoint)
+//    if err != nil {
+//        log.Printf("not sending statistics to statsd (%s)", err)
+//        s = g2s.Noop()
+//    }
+//
+func Noop() Statter {
 	return noStatsd{}
 }
