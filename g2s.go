@@ -66,7 +66,7 @@ func bufferize(sendables []sendable, max int) [][]byte {
 	}
 
 	if len(b1) > 0 {
-		bN = append(bN, b1)
+		bN = append(bN, b1[0:len(b1)-1])
 	}
 
 	return bN
