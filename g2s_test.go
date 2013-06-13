@@ -18,7 +18,7 @@ func TestCounter(t *testing.T) {
 
 	s.Counter(1.0, "gorets", 1)
 
-	if expected, got := "gorets:1|c\n", b.String(); expected != got {
+	if expected, got := "gorets:1|c", b.String(); expected != got {
 		t.Errorf("expected '%s', got '%s'", expected, got)
 	}
 }
@@ -32,7 +32,7 @@ func TestTiming(t *testing.T) {
 
 	s.Timing(1.0, "glork", 320*time.Millisecond)
 
-	if expected, got := "glork:320|ms\n", b.String(); expected != got {
+	if expected, got := "glork:320|ms", b.String(); expected != got {
 		t.Errorf("expected '%s', got '%s'", expected, got)
 	}
 }
@@ -46,7 +46,7 @@ func TestGauge(t *testing.T) {
 
 	s.Gauge(1.0, "gaugor", "333")
 
-	if expected, got := "gaugor:333|g\n", b.String(); expected != got {
+	if expected, got := "gaugor:333|g", b.String(); expected != got {
 		t.Errorf("expected '%s', got '%s'", expected, got)
 	}
 }
@@ -61,7 +61,7 @@ func TestMany(t *testing.T) {
 	s.Counter(1.0, "foo", 1, 2, 3)
 	s.Timing(1.0, "bar", 4*time.Millisecond, 5*time.Millisecond)
 
-	expected := "foo:1|c\nfoo:2|c\nfoo:3|c\nbar:4|ms\nbar:5|ms\n"
+	expected := "foo:1|c\nfoo:2|c\nfoo:3|cbar:4|ms\nbar:5|ms"
 	got := b.String()
 	if expected != got {
 		t.Errorf("expected '%s', got '%s'", expected, got)
@@ -82,8 +82,17 @@ func TestSamplingZero(t *testing.T) {
 	}
 }
 
+type SliceWriter struct {
+	data []string
+}
+
+func (this *SliceWriter) Write(bytes []byte) (int, error) {
+	this.data = append(this.data, string(bytes))
+	return len(bytes), nil
+}
+
 func TestSampling(t *testing.T) {
-	b := &bytes.Buffer{}
+	b := &SliceWriter{}
 	s, err := New(b)
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +106,7 @@ func TestSampling(t *testing.T) {
 
 	middle, threshold := n/2, n/10
 	expectedMin, expectedMax := middle-threshold, middle+threshold
-	got := strings.Split(b.String(), "\n")
+	got := b.data
 
 	rateToks := strings.Split(got[0], "@")
 	if len(rateToks) != 2 {
