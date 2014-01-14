@@ -105,7 +105,7 @@ func init() {
 
 // cluster implements the Cluster interface on a concrete Redis cluster.
 type cluster struct {
-	shard           *shard.Shard
+	shards          *shard.Shards
 	maxSize         int
 	instrumentation instrumentation.Instrumentation
 }
@@ -113,12 +113,12 @@ type cluster struct {
 // New creates and returns a new Cluster backed by a concrete Redis cluster.
 // maxSize for each key will be enforced at write time. Instrumentation may be
 // nil.
-func New(shard *shard.Shard, maxSize int, instr instrumentation.Instrumentation) Cluster {
+func New(shards *shard.Shards, maxSize int, instr instrumentation.Instrumentation) Cluster {
 	if instr == nil {
 		instr = instrumentation.NopInstrumentation{}
 	}
 	return &cluster{
-		shard:           shard,
+		shards:          shards,
 		maxSize:         maxSize,
 		instrumentation: instr,
 	}
@@ -129,7 +129,7 @@ func (c *cluster) Insert(tuples []common.KeyScoreMember) error {
 	// Bucketize
 	m := map[int][]common.KeyScoreMember{}
 	for _, tuple := range tuples {
-		index := c.shard.Index(tuple.Key)
+		index := c.shards.Index(tuple.Key)
 		m[index] = append(m[index], tuple)
 	}
 
@@ -138,7 +138,7 @@ func (c *cluster) Insert(tuples []common.KeyScoreMember) error {
 	for index, tuples := range m {
 		go func(index int, tuples []common.KeyScoreMember) {
 
-			errChan <- c.shard.WithIndex(index, func(conn redis.Conn) error {
+			errChan <- c.shards.WithIndex(index, func(conn redis.Conn) error {
 				return pipelineInsert(conn, tuples, c.maxSize)
 			})
 
@@ -163,7 +163,7 @@ func (c *cluster) Select(keys []string, offset, limit int) <-chan Element {
 		// Bucketize
 		m := map[int][]string{}
 		for _, key := range keys {
-			index := c.shard.Index(key)
+			index := c.shards.Index(key)
 			m[index] = append(m[index], key)
 		}
 
@@ -179,7 +179,7 @@ func (c *cluster) Select(keys []string, offset, limit int) <-chan Element {
 				// minimize our time with the redis.Conn.
 				var elements []Element
 				var result map[string][]common.KeyScoreMember
-				if err := c.shard.WithIndex(index, func(conn redis.Conn) (err error) {
+				if err := c.shards.WithIndex(index, func(conn redis.Conn) (err error) {
 					result, err = pipelineRevRange(conn, keys, offset, limit)
 					return
 				}); err != nil {
@@ -206,7 +206,7 @@ func (c *cluster) Delete(tuples []common.KeyScoreMember) error {
 	// Bucketize
 	m := map[int][]common.KeyScoreMember{}
 	for _, tuple := range tuples {
-		index := c.shard.Index(tuple.Key)
+		index := c.shards.Index(tuple.Key)
 		m[index] = append(m[index], tuple)
 	}
 
@@ -215,7 +215,7 @@ func (c *cluster) Delete(tuples []common.KeyScoreMember) error {
 	for index, tuples := range m {
 		go func(index int, tuples []common.KeyScoreMember) {
 
-			errChan <- c.shard.WithIndex(index, func(conn redis.Conn) error {
+			errChan <- c.shards.WithIndex(index, func(conn redis.Conn) error {
 				return pipelineDelete(conn, tuples, c.maxSize)
 			})
 
@@ -237,7 +237,7 @@ func (c *cluster) Delete(tuples []common.KeyScoreMember) error {
 func (c *cluster) Score(key, member string) (float64, bool, error) {
 	var score float64
 	var inserted bool
-	err := c.shard.With(key, func(conn redis.Conn) error {
+	err := c.shards.With(key, func(conn redis.Conn) error {
 		var err error
 		score, inserted, err = pipelineScore(conn, key, member)
 		return err

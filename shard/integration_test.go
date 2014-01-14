@@ -20,7 +20,7 @@ func TestRecovery(t *testing.T) {
 	port := "10001"
 	maxConnectionsPerInstance := 2
 	redisTimeout := 50 * time.Millisecond
-	c := shard.New(
+	s := shard.New(
 		[]string{"localhost:" + port},
 		redisTimeout, redisTimeout, redisTimeout,
 		maxConnectionsPerInstance,
@@ -37,7 +37,7 @@ func TestRecovery(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 
 		// Try initial PING
-		if err := c.With("irrelevant", func(conn redis.Conn) error {
+		if err := s.With("irrelevant", func(conn redis.Conn) error {
 			_, err := conn.Do("PING")
 			return err
 		}); err != nil {
@@ -51,7 +51,7 @@ func TestRecovery(t *testing.T) {
 	go func() {
 		// Redis is down. Make a bunch of requests. All should fail quickly.
 		for i := 0; i < requests; i++ {
-			if err := c.With("irrelevant", func(conn redis.Conn) error {
+			if err := s.With("irrelevant", func(conn redis.Conn) error {
 				_, err := conn.Do("PING")
 				return err
 			}); err == nil {
@@ -79,14 +79,14 @@ func TestRecovery(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 
 		// Try second PING x1
-		err := c.With("irrelevant", func(conn redis.Conn) error {
+		err := s.With("irrelevant", func(conn redis.Conn) error {
 			_, err := conn.Do("PING")
 			return err
 		})
 		t.Logf("Second PING x1 gave error %v (just FYI)", err)
 
 		// Try second PING x2
-		if err := c.With("irrelevant", func(conn redis.Conn) error {
+		if err := s.With("irrelevant", func(conn redis.Conn) error {
 			_, err := conn.Do("PING")
 			return err
 		}); err != nil {

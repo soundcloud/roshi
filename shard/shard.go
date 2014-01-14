@@ -7,8 +7,8 @@ import (
 	"github.com/soundcloud/roshi/vendor/redigo/redis"
 )
 
-// Shard maintains a connection pool for multiple Redis instances.
-type Shard struct {
+// Shards maintains a connection pool for multiple Redis instances.
+type Shards struct {
 	pools []*connectionPool
 	hash  func(string) uint32
 }
@@ -21,7 +21,7 @@ func New(
 	connectTimeout, readTimeout, writeTimeout time.Duration,
 	maxConnectionsPerInstance int,
 	hash func(string) uint32,
-) *Shard {
+) *Shards {
 	pools := make([]*connectionPool, len(addresses))
 	for i, address := range addresses {
 		pools[i] = newConnectionPool(
@@ -30,7 +30,7 @@ func New(
 			maxConnectionsPerInstance,
 		)
 	}
-	return &Shard{
+	return &Shards{
 		pools: pools,
 		hash:  hash,
 	}
@@ -38,14 +38,14 @@ func New(
 
 // Index returns a reference to the connection pool that will be used to
 // satisfy any request for the given key. Pass that value to WithIndex.
-func (c *Shard) Index(key string) int {
-	return int(c.hash(key) % uint32(len(c.pools)))
+func (s *Shards) Index(key string) int {
+	return int(s.hash(key) % uint32(len(s.pools)))
 }
 
-// Size returns how many instances the cluster sits over. Useful for ranging
+// Size returns how many instances the shards sits over. Useful for ranging
 // over with WithIndex.
-func (c *Shard) Size() int {
-	return len(c.pools)
+func (s *Shards) Size() int {
+	return len(s.pools)
 }
 
 // WithIndex selects a single Redis instance from the referenced connection
@@ -56,9 +56,9 @@ func (c *Shard) Size() int {
 // WithIndex will return an error if it wasn't able to successfully retrieve a
 // connection from the referenced connection pool, and will forward any error
 // returned by the `do` function.
-func (c *Shard) WithIndex(index int, do func(redis.Conn) error) error {
-	conn, err := c.pools[index].get() // blocking up to connectTimeout
-	defer c.pools[index].put(conn)    // always put, even if it's nil
+func (s *Shards) WithIndex(index int, do func(redis.Conn) error) error {
+	conn, err := s.pools[index].get() // blocking up to connectTimeout
+	defer s.pools[index].put(conn)    // always put, even if it's nil
 	if err != nil {
 		return err
 	}
@@ -72,15 +72,15 @@ func (c *Shard) WithIndex(index int, do func(redis.Conn) error) error {
 
 // With is a convenience function that combines Index and WithIndex, for
 // simple/single Redis requests on a single key.
-func (c *Shard) With(key string, do func(redis.Conn) error) error {
-	index := c.Index(key)
-	return c.WithIndex(index, do)
+func (s *Shards) With(key string, do func(redis.Conn) error) error {
+	index := s.Index(key)
+	return s.WithIndex(index, do)
 }
 
 // Close closes all available (idle) connections in the cluster.
 // Close does not affect oustanding (in-use) connections.
-func (c *Shard) Close() error {
-	for _, pool := range c.pools {
+func (s *Shards) Close() error {
+	for _, pool := range s.pools {
 		pool.closeAll()
 	}
 	return nil

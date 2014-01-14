@@ -1,7 +1,7 @@
-# Vendoring dependencies
+# vendor
 
 This directory holds vendored dependencies, managed via [git subtrees](0).
-All commands should be run from the top level of the repository.
+All management commands should be run from the top level of the repository.
 
 [0]: http://blogs.atlassian.com/2013/05/alternatives-to-git-submodule-git-subtree
 
