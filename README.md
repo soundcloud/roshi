@@ -102,9 +102,9 @@ roshi-server makes a Roshi farm accessible through a REST-ish HTTP interface.
 
 # Development
 
-Roshi is written in [Go][http://golang.org]. You'll need a recent version of
+Roshi is written in [Go](http://golang.org). You'll need a recent version of
 Go installed on your computer to build Roshi. If you're on a Mac and use
-[homebrew][http://brew.sh], `brew install go` should work fine.
+[homebrew](http://brew.sh), `brew install go` should work fine.
 
 ## Build
 
