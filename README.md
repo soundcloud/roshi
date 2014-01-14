@@ -1,4 +1,3 @@
-roshi
-=====
+# roshi
 
-Roshi implements a LWW-element-set CRDT with inline garbage collection for time-series events
+Roshi implements a LWW-element-set CRDT with inline garbage collection for time-series events.
