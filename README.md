@@ -21,7 +21,7 @@ job with a relatively small surface area. From the bottom up...
 ## Redis
 
 Roshi is ultimately implemented on top of Redis instance(s), utilizing the
-[sorted set][sorted set] data type. For more details on how the sorted sets
+[sorted set][sorted-set] data type. For more details on how the sorted sets
 are used, see package cluster.
 
 [sorted-set]: http://redis.io/commands#sorted_set
