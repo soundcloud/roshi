@@ -1,0 +1,87 @@
+// Package shard performs key-based sharding over multiple Redis instances.
+package shard
+
+import (
+	"time"
+
+	"github.com/soundcloud/roshi/vendor/redigo/redis"
+)
+
+// Shard maintains a connection pool for multiple Redis instances.
+type Shard struct {
+	pools []*connectionPool
+	hash  func(string) uint32
+}
+
+// New creates and returns a new Shard, with one connection pool for
+// each of the passed addresses. The order of the addresses determines the hash
+// slots, so be careful to make that deterministic.
+func New(
+	addresses []string,
+	connectTimeout, readTimeout, writeTimeout time.Duration,
+	maxConnectionsPerInstance int,
+	hash func(string) uint32,
+) *Shard {
+	pools := make([]*connectionPool, len(addresses))
+	for i, address := range addresses {
+		pools[i] = newConnectionPool(
+			address,
+			connectTimeout, readTimeout, writeTimeout,
+			maxConnectionsPerInstance,
+		)
+	}
+	return &Shard{
+		pools: pools,
+		hash:  hash,
+	}
+}
+
+// Index returns a reference to the connection pool that will be used to
+// satisfy any request for the given key. Pass that value to WithIndex.
+func (c *Shard) Index(key string) int {
+	return int(c.hash(key) % uint32(len(c.pools)))
+}
+
+// Size returns how many instances the cluster sits over. Useful for ranging
+// over with WithIndex.
+func (c *Shard) Size() int {
+	return len(c.pools)
+}
+
+// WithIndex selects a single Redis instance from the referenced connection
+// pool, and then calls the given function with that connection. If the
+// function returns a nil error, WithIndex returns the connection to the pool
+// after it's used. Otherwise, WithIndex discards the connection.
+//
+// WithIndex will return an error if it wasn't able to successfully retrieve a
+// connection from the referenced connection pool, and will forward any error
+// returned by the `do` function.
+func (c *Shard) WithIndex(index int, do func(redis.Conn) error) error {
+	conn, err := c.pools[index].get() // blocking up to connectTimeout
+	defer c.pools[index].put(conn)    // always put, even if it's nil
+	if err != nil {
+		return err
+	}
+
+	err = do(conn)
+	if err != nil {
+		conn.Close() // deferred `put` will detect this, and reject the conn
+	}
+	return err
+}
+
+// With is a convenience function that combines Index and WithIndex, for
+// simple/single Redis requests on a single key.
+func (c *Shard) With(key string, do func(redis.Conn) error) error {
+	index := c.Index(key)
+	return c.WithIndex(index, do)
+}
+
+// Close closes all available (idle) connections in the cluster.
+// Close does not affect oustanding (in-use) connections.
+func (c *Shard) Close() error {
+	for _, pool := range c.pools {
+		pool.closeAll()
+	}
+	return nil
+}
