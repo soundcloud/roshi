@@ -26,7 +26,7 @@ are used, see package cluster.
 
 [sorted-set]: http://redis.io/commands#sorted_set
 
-## Shard
+## shard
 
 [Package shard][shard] performs key-based sharding over one or more Redis
 instances. It exposes basically a single method, taking a key and yielding a
@@ -42,7 +42,7 @@ easy.
 
 [shard]: http://github.com/soundcloud/roshi/tree/master/shard
 
-## Cluster
+## cluster
 
 [Package cluster][cluster] implements an Insert/Select/Delete API on top of
 a single shard. To ensure idempotency, package cluster expects timestamps to
@@ -57,7 +57,7 @@ data set.
 
 [cluster]: http://github.com/soundcloud/roshi/tree/master/cluster
 
-## Farm
+## farm
 
 [Package farm][farm] implements a single Insert/Select/Delete API over multiple
 underlying clusters. Writes (Inserts and Deletes) are sent to all clusters, and
@@ -71,11 +71,14 @@ data set.
 
 ## roshi-server
 
-roshi-server makes a Roshi farm accessible through a REST-ish HTTP interface.
+[roshi-server][roshi-server] makes a Roshi farm accessible through a REST-ish
+HTTP interface.
 
 * Insert: HTTP POST, body with JSON-encoded key-score-members array
 * Select: HTTP GET, body with JSON-encoded keys array
 * Delete: HTTP DELETE, body with JSON-encoded key-score-members array
+
+[roshi-server]: http://github.com/soundcloud/roshi/tree/master/roshi-server
 
 ## The big picture
 
