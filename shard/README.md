@@ -1,33 +1,11 @@
 # shard
 
-[API documentation](http://godoc.org/github.com/soundcloud/roshi/shard).
-
 Package shard connects to multiple physical Redis instances, and emulates a
 single logical Redis instance. Clients are expected (but not required) to use
 their Redis keys as hash keys to select a Redis instance. The package
 maintains a pool of connections to each instance.
 
-## Constructor parameters
-
-* **addresses** are host:port strings for each Redis instance. The number and
-  order of addresses is significant: they determines the size of, and position
-  of instances within, the hash ring.
-
-* **connectTimeout** is the timeout for establishing a connection to each
-  underlying Redis instance.
-
-* **readTimeout** is the timeout for reading a reply to a command from an
-  established connection.
-
-* **writeTimeout** is the timeout for writing a command to an established
-  connection.
-
-* **maxConnectionsPerInstance** determines the size of the connection pool for
-  each Redis instance.
-
-* **hash** defines the hash function used by the With method. Any function that
-  takes a `string` and returns a `uint32` may be used. Package shard ships with
-  several options, including Murmur3 (recommended), FNV, and FNVa.
+[API documentation](http://godoc.org/github.com/soundcloud/roshi/shard).
 
 ## Usage
 

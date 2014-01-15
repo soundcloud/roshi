@@ -13,9 +13,21 @@ type Shards struct {
 	hash  func(string) uint32
 }
 
-// New creates and returns a new Shard, with one connection pool for
-// each of the passed addresses. The order of the addresses determines the hash
-// slots, so be careful to make that deterministic.
+// New creates and returns a new Shards object.
+//
+// Addresses are host:port strings for each underlying Redis instance. The
+// number and order of the addresses determines the hash slots, so be careful
+// to make that deterministic.
+//
+// Connect timeout is the timeout for establishing a connection to any
+// underlying Redis instance. Read timeout is the timeout for reading a reply
+// to a command via an established connection. Write timeout is the timeout
+// for writing a command to an established connection.
+//
+// Max connections per instance is the size of the connection pool for each
+// Redis instance. Hash defines the hash function used by the With methods.
+// Any function that takes a string and returns a uint32 may be used. Package
+// shard ships with several options, including Murmur3, FNV, and FNVa.
 func New(
 	addresses []string,
 	connectTimeout, readTimeout, writeTimeout time.Duration,
