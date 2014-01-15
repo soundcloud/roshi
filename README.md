@@ -14,8 +14,8 @@ API:
 Roshi stores a sharded copy of your dataset in multiple independent Redis
 instances, called a **cluster**. Roshi provides fault tolerance by duplicating
 clusters; multiple identical clusters, normally at least 3, form a **farm**.
-Roshi leverages CRDT semantics to ensure consistency; see [theory](#theory),
-below.
+Roshi leverages CRDT semantics to ensure consistency without explicit
+consensus; see [theory](#theory), below.
 
 # Theory
 
