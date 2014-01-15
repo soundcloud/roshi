@@ -52,8 +52,8 @@ delete(key, score, member):
 
 These properties ensure that every possible finite set of (WriteOp +
 KeyScoreMember) operations resolves to the same final state, regardless of the
-execution order. Stated another way, any valid [linearization][aphyr] is equal
-to any of its permutations. I think.
+execution order. Stated another way, any valid [linearization][aphyr] of those
+operations is equal to any of its permutations. I think.
 
 [aphyr]: http://aphyr.com/posts/309-knossos-redis-and-linearizability
 
