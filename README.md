@@ -24,7 +24,7 @@ below.
 ## CRDT
 
 CRDT semantics allow Roshi to achieve eventual consistency without the burden
-of active distributed consensus.
+of consensus.
 
 (Background, and where our system sits in the ecosystem.)
 
