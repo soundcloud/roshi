@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/peterbourgon/crdt/instrumentation"
+	"github.com/soundcloud/roshi/instrumentation"
 )
 
 type plaintextInstrumentation struct{ io.Writer }

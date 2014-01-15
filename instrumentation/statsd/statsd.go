@@ -4,8 +4,8 @@ package statsd
 import (
 	"time"
 
-	"github.com/peterbourgon/crdt/instrumentation"
 	"github.com/peterbourgon/g2s"
+	"github.com/soundcloud/roshi/instrumentation"
 )
 
 type statsdInstrumentation struct {

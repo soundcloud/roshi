@@ -74,10 +74,7 @@ func SendAllReadAll(farm *Farm) coreReadStrategy {
 		elements := make(chan cluster.Element)
 		wg := sync.WaitGroup{}
 		wg.Add(len(farm.clusters))
-		go func() {
-			wg.Wait()
-			close(elements)
-		}()
+		go func() { wg.Wait(); close(elements) }()
 
 		blockingBegan := time.Now()
 		scatterSelects(farm.clusters, keys, offset, limit, &wg, elements)
@@ -136,28 +133,26 @@ func SendAllReadFirstLinger(farm *Farm) coreReadStrategy {
 	return SendVarReadFirstLinger(-1, -1)(farm)
 }
 
-// SendVarReadFirstLinger is a refined version of
-// SendAllReadFirstLinger. It works in the same way but reduces the
-// requests to all clusters under certain circumstances.
+// SendVarReadFirstLinger is a refined version of SendAllReadFirstLinger. It
+// works in the same way but reduces the requests to all clusters under
+// certain circumstances.
 //
-// As long as the number of reads per second are below
-// thresholdReadsPerSec, everything stays the same. However,
-// SendVarReadFirstLinger never launches more "SendAll" style reads
-// per second as set by thresholdReadsPerSec. If more reads are
-// required, the surplus is executed in "SendOne" style. "SendOne" has
-// two issues, though: First, no repairs will ever result from a
-// "SendOne" read. Second, if the one cluster the read request is sent
-// to is unable (or slow) to reply, the whole read will fail (or be
-// delayed). The first issue is implicitly solved by
-// SendVarReadFirstLinger because the baseline amount of "SendAll"
-// reads effectively provides a probabilistic repair scheme. To solve
-// the second issue, SendVarReadFirstLinger promotes any "SendOne"
-// read to a "SendAll" read if it was unsuccessful to return any
+// As long as the number of reads per second are below thresholdReadsPerSec,
+// everything stays the same. However, SendVarReadFirstLinger never launches
+// more "SendAll" style reads per second as set by thresholdReadsPerSec. If
+// more reads are required, the surplus is executed in "SendOne" style.
+// "SendOne" has two issues, though: First, no repairs will ever result from a
+// "SendOne" read. Second, if the one cluster the read request is sent to is
+// unable (or slow) to reply, the whole read will fail (or be delayed). The
+// first issue is implicitly solved by SendVarReadFirstLinger because the
+// baseline amount of "SendAll" reads effectively provides a probabilistic
+// repair scheme. To solve the second issue, SendVarReadFirstLinger promotes
+// any "SendOne" read to a "SendAll" read if it was unsuccessful to return any
 // results within a time set by thresholdLatency.
 //
-// For unlimited thresholdReadsPerSec, set it to a negative number.
-// To never promote "SendOne" to "SendAll", set thresholdLatency to a
-// negative duration.
+// For unlimited thresholdReadsPerSec, set it to a negative number. To never
+// promote "SendOne" to "SendAll", set thresholdLatency to a negative
+// duration.
 func SendVarReadFirstLinger(thresholdReadsPerSec int, thresholdLatency time.Duration) func(*Farm) coreReadStrategy {
 	permitSendAll := make(chan bool)
 	var minWaitAfterSendAll time.Duration
