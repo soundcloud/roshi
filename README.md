@@ -72,17 +72,18 @@ easy.
 ## cluster
 
 [Package cluster][cluster] implements an Insert/Select/Delete API on top of
-a single shard. To ensure idempotency, package cluster expects timestamps to
-arrive as float64s, which it interprets as versions, and refuses writes with
-smaller versions than what's already been persisted. To ensure information
-isn't lost via deletes, package cluster maintains two physical Redis sorted
-sets for every logical (user) key, and manages the transition of key-version-
-value tuples between those sets.
+package shard. To ensure idempotency and [commutativity][commutativity],
+package cluster expects timestamps to arrive as float64s, and refuses writes
+with smaller timestamps than what's already been persisted. To ensure
+information isn't lost via deletes, package cluster maintains two physical
+Redis sorted sets for every logical (user) key, and manages the transition of
+key-timestamp-value tuples between those sets.
 
-Package cluster provides and manages the sharding and distribution of your
+Package cluster provides and manages the sharding of a single copy of your
 dataset.
 
 [cluster]: http://github.com/soundcloud/roshi/tree/master/cluster
+[commutativity]: http://en.wikipedia.org/wiki/Commutative_property
 
 ## farm
 
@@ -92,7 +93,7 @@ a quorum is required for success. Reads (Selects) abide one of several read
 strategies. Some read strategies allow for the possibility of read-repair.
 
 Package farm provides and manages safety and availiablity requirements of your
-dataset.
+complete dataset.
 
 [farm]: http://github.com/soundcloud/roshi/tree/master/farm
 
