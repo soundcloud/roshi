@@ -1,11 +1,11 @@
 # shard
 
+[![GoDoc](https://godoc.org/github.com/soundcloud/roshi/shard?status.png)](https://godoc.org/github.com/soundcloud/roshi/shard)
+
 Package shard connects to multiple physical Redis instances, and emulates a
 single logical Redis instance. Clients are expected (but not required) to use
 their Redis keys as hash keys to select a Redis instance. The package
 maintains a pool of connections to each instance.
-
-[API documentation](http://godoc.org/github.com/soundcloud/roshi/shard).
 
 ## Usage
 
