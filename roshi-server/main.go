@@ -51,7 +51,7 @@ func main() {
 		statsdSampleRate          = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
 		statsdBucketPrefix        = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
 		httpCircuitBreaker        = flag.Bool("http.circuit.breaker", true, "Enable HTTP server circuit breaker")
-		httpAddress               = flag.String("http.address", ":6301", "HTTP listen address")
+		httpAddress               = flag.String("http.address", ":6302", "HTTP listen address")
 	)
 	flag.Parse()
 	log.Printf("GOMAXPROCS %d", runtime.GOMAXPROCS(-1))
