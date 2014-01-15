@@ -3,15 +3,42 @@
 Roshi implements a LWW-element-set CRDT with inline garbage collection for
 time-series events.
 
-At a high level, Roshi maintains a bunch of sets of values, with each set
-ordered according to (external) timestamp, newest-first. Roshi provides the
-following API:
+At a high level, Roshi maintains sets of values, with each set ordered
+according to (external) timestamp, newest-first. Roshi provides the following
+API:
 
 * Insert(key, timestamp, value)
 * Delete(key, timestamp, value)
 * Select(key, offset, limit) []TimestampValue
 
-(Very short description of Roshi's consistency guarantees/data model here.)
+Roshi stores a sharded copy of your dataset in multiple independent Redis
+instances, called a **cluster**. Roshi provides fault tolerance by duplicating
+clusters; multiple identical clusters, normally at least 3, form a **farm**.
+Roshi leverages CRDT semantics to ensure consistency; see [theory](#theory),
+below.
+
+# Theory
+
+(Big section here.)
+
+## CRDT
+
+CRDT semantics allow Roshi to achieve eventual consistency without the burden
+of active distributed consensus.
+
+(Background, and where our system sits in the ecosystem.)
+
+## Replication
+
+(Details on how data gets copied to different clusters.)
+
+## Fault tolerance
+
+(Description of normal mode and various failure modes.)
+
+## Considerations
+
+(Caveats, assumptions, future work.)
 
 # Architecture
 
@@ -53,7 +80,7 @@ sets for every logical (user) key, and manages the transition of key-version-
 value tuples between those sets.
 
 Package cluster provides and manages the sharding and distribution of your
-data set.
+dataset.
 
 [cluster]: http://github.com/soundcloud/roshi/tree/master/cluster
 
@@ -65,7 +92,7 @@ a quorum is required for success. Reads (Selects) abide one of several read
 strategies. Some read strategies allow for the possibility of read-repair.
 
 Package farm provides and manages safety and availiablity requirements of your
-data set.
+dataset.
 
 [farm]: http://github.com/soundcloud/roshi/tree/master/farm
 
@@ -98,10 +125,6 @@ HTTP interface.
 |                         +--------------------+                         |
 +------------------------------------------------------------------------+
 ```
-
-# Theory
-
-(Big section here.)
 
 # Development
 
