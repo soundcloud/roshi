@@ -19,7 +19,7 @@ consensus; see [theory](#theory), below.
 
 # Theory
 
-(Big section here.)
+(Pending big section here.)
 
 ## CRDT
 
@@ -145,4 +145,3 @@ Go installed on your computer to build Roshi. If you're on a Mac and use
 
     go get github.com/soundcloud/roshi/roshi-server
     roshi-server -h
-

@@ -50,10 +50,14 @@ delete(key, score, member):
 		del(key+, member)
 ```
 
-These properties ensure that every possible finite set of (WriteOp +
-KeyScoreMember) operations resolves to the same final state, regardless of the
-execution order. Stated another way, any valid [linearization][aphyr] of those
-operations is equal to any of its permutations. I think.
+Script execution is atomic, and a single logical key is deterministically
+stored on a single node. These properties ensure that every possible finite
+set of (WriteOp + KeyScoreMember) operations resolves to the same final state,
+regardless of the execution order. (I think another way of stating that is
+that any valid [linearization][aphyr] of write operations is equal to any of
+that linearization's permutations. Feedback on this point would be
+appreciated.) Interleaved reads will always return correct data from the
+perspective of that specific history.
 
 [aphyr]: http://aphyr.com/posts/309-knossos-redis-and-linearizability
 
