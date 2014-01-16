@@ -109,7 +109,7 @@ For more information on CRDTs, the following resources might be helpful:
 ## Replication
 
 Roshi replicates data over several clusters (see the chapter on
-[architecture][#architecture]). A typical replication factor is 3. Each Roshi
+[architecture](#architecture)). A typical replication factor is 3. Each Roshi
 instance can serve all requests (Insert, Delete, Select) for a client. Roshi
 has two methods of replicating data: during write, and during read-repair.
 
