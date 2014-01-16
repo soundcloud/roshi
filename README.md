@@ -84,9 +84,9 @@ and remove(element) are the operations.
     A(a,1)R() + remove(a,1) = A(a,1)R()
     A(a,1)R() + remove(a,2) = A()R(a,2)
 
-    A()R(a,1) + add(a,0)    = A(a,1)R()
-    A()R(a,1) + add(a,1)    = A(a,1)R()
-    A()R(a,1) + add(a,2)    = A()R(a,2)
+    A()R(a,1) + add(a,0)    = A()R(a,1)
+    A()R(a,1) + add(a,1)    = A()R(a,1)
+    A()R(a,1) + add(a,2)    = A(a,2)R()
 
     A()R(a,1) + remove(a,0) = A()R(a,1)
     A()R(a,1) + remove(a,1) = A()R(a,1)
