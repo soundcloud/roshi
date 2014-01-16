@@ -39,7 +39,7 @@ Operations on CRDTs need to adhere [to the following rules][mixu]:
 
 - Associativity (a+(b+c)=(a+b)+c), so that grouping doesn't matter
 - Commutativity (a+b=b+a), so that order of application doesn't matter
-- Idempotence (a+a=a), so that duplication does not matter
+- Idempotence (a+a=a), so that duplication doesn't matter
 
 Data types as well as operations have to be specifically crafted to meet these
 rules. CRDTs have known implementations for (among others) counters,
@@ -63,9 +63,9 @@ timestamp.
 Roshi implements the above definition, but extends it by applying instant
 garbage collection. When adding an element e to the set, check if the element
 is already in the REMOVE set. If so, check the REMOVE set element timestamp.
-If the REMOVE SET element timestamp is lower than the new element timestamp,
+If the REMOVE set element timestamp is lower than the new element timestamp,
 delete the element from the REMOVE set and add the new element to the ADD set.
-If the REMOVE SET element timestamp is higher than the new element timestamp,
+If the REMOVE set element timestamp is higher than the new element timestamp,
 do nothing. The same process is applied with interchanged REMOVE/ADD SETs when
 removing an element. In contrast to the formal description above, the Roshi
 approach allows for the same element to be added again (with a higher
