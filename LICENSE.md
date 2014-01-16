@@ -1,4 +1,4 @@
-Copyright (c) 2014, SoundCloud Ltd.
+Copyright &copy; 2014, SoundCloud Ltd.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
