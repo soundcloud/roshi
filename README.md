@@ -35,7 +35,7 @@ consenus between replicas. In turn, this allows for easier implementation (no
 consensus protocol implementation) as well as lower latency (no wait-time for
 consensus).
 
-Operations on CRDTs need to adher [to the following rules][mixu]:
+Operations on CRDTs need to adhere [to the following rules][mixu]:
 
 - Associativity (a+(b+c)=(a+b)+c), so that grouping doesn't matter
 - Commutativity (a+b=b+a), so that order of application doesn't matter
