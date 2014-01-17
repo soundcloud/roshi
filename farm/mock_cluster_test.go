@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"sync/atomic"
 	"testing"
 
 	"github.com/soundcloud/roshi/cluster"
@@ -71,11 +72,11 @@ func TestMockCluster(t *testing.T) {
 type mockCluster struct {
 	m                 map[string]common.KeyScoreMembers
 	failing           bool
-	countInsert       int
-	countSelect       int
-	countDelete       int
-	countScore        int
-	countOpenChannels int
+	countInsert       int32
+	countSelect       int32
+	countDelete       int32
+	countScore        int32
+	countOpenChannels int32
 }
 
 func newMockCluster() *mockCluster {
@@ -92,7 +93,7 @@ func newFailingMockCluster() *mockCluster {
 }
 
 func (c *mockCluster) Insert(tuples []common.KeyScoreMember) error {
-	c.countInsert++
+	atomic.AddInt32(&c.countInsert, 1)
 	if c.failing {
 		return errors.New("failtown, population you")
 	}
@@ -110,17 +111,17 @@ func (c *mockCluster) Insert(tuples []common.KeyScoreMember) error {
 }
 
 func (c *mockCluster) Select(keys []string, offset, limit int) <-chan cluster.Element {
-	c.countSelect++
+	atomic.AddInt32(&c.countSelect, 1)
 	ch := make(chan cluster.Element)
 	if c.failing {
 		close(ch)
 		return ch
 	}
-	c.countOpenChannels++
+	atomic.AddInt32(&c.countOpenChannels, 1)
 	go func() {
 		defer func() {
 			close(ch)
-			c.countOpenChannels--
+			atomic.AddInt32(&c.countOpenChannels, -1)
 		}()
 		for _, key := range keys {
 			ksms := c.m[key]
@@ -139,12 +140,11 @@ func (c *mockCluster) Select(keys []string, offset, limit int) <-chan cluster.El
 }
 
 func (c *mockCluster) Delete(tuples []common.KeyScoreMember) error {
-	c.countDelete++
+	atomic.AddInt32(&c.countDelete, 1)
 	if c.failing {
 		return errors.New("failtown, population you")
 	}
 	for _, toDelete := range tuples {
-
 		for key, existingTuples := range c.m {
 			replacementTuples := []common.KeyScoreMember{}
 			for _, existingTuple := range existingTuples {
@@ -155,7 +155,6 @@ func (c *mockCluster) Delete(tuples []common.KeyScoreMember) error {
 			}
 			c.m[key] = replacementTuples
 		}
-
 	}
 	return nil
 }
@@ -163,7 +162,7 @@ func (c *mockCluster) Delete(tuples []common.KeyScoreMember) error {
 // Score in this mock implementation will never return a score for
 // deleted entries.
 func (c *mockCluster) Score(key, member string) (float64, bool, error) {
-	c.countScore++
+	atomic.AddInt32(&c.countScore, 1)
 	if c.failing {
 		return 0, false, errors.New("failtown, population you")
 	}

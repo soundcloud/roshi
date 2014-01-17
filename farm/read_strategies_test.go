@@ -2,6 +2,7 @@ package farm
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ func checkResult(result map[string][]common.KeyScoreMember, err error) error {
 func totalSelectCount(clusters []cluster.Cluster) int {
 	var sum int
 	for _, c := range clusters {
-		sum += c.(*mockCluster).countSelect
+		sum += int(atomic.LoadInt32(&c.(*mockCluster).countSelect))
 	}
 	return sum
 }
@@ -41,7 +42,7 @@ func totalSelectCount(clusters []cluster.Cluster) int {
 func totalOpenChannelCount(clusters []cluster.Cluster) int {
 	var sum int
 	for _, c := range clusters {
-		sum += c.(*mockCluster).countOpenChannels
+		sum += int(atomic.LoadInt32(&c.(*mockCluster).countOpenChannels))
 	}
 	return sum
 }
