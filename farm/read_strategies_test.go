@@ -51,10 +51,13 @@ func totalOpenChannelCount(clusters []cluster.Cluster) int {
 // for which a repair was requested. This is useful in unit tests.
 func MockRepairer(*Farm) coreRepairer { return &mockCoreRepairer{} }
 
-type mockCoreRepairer struct{ requestCount int }
+type mockCoreRepairer struct{ requestCount int32 }
 
-func (r *mockCoreRepairer) requestRepair(reqs []keyMember) { r.requestCount += len(reqs) }
-func (r *mockCoreRepairer) close()                         {}
+func (r *mockCoreRepairer) requestRepair(reqs []keyMember) {
+	atomic.AddInt32(&r.requestCount, int32(len(reqs)))
+}
+
+func (r *mockCoreRepairer) close() {}
 
 func TestSendOneReadOne(t *testing.T) {
 	clusters := newMockClusters(3)
@@ -68,7 +71,7 @@ func TestSendOneReadOne(t *testing.T) {
 	if expected, got := 1, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 0, farm.repairer.(*mockCoreRepairer).requestCount; expected != got {
+	if expected, got := 0, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 	if totalOpenChannelCount(clusters) > 0 {
@@ -88,7 +91,7 @@ func TestSendAllReadAll(t *testing.T) {
 	if expected, got := 3, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 0, farm.repairer.(*mockCoreRepairer).requestCount; expected != got {
+	if expected, got := 0, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -102,7 +105,7 @@ func TestSendAllReadAll(t *testing.T) {
 	if expected, got := 6, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 1, farm.repairer.(*mockCoreRepairer).requestCount; expected != got {
+	if expected, got := 1, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -116,7 +119,7 @@ func TestSendAllReadAll(t *testing.T) {
 	if expected, got := 7, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 1, farm.repairer.(*mockCoreRepairer).requestCount; expected != got {
+	if expected, got := 1, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
 		// Repair count still 1.
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
@@ -134,7 +137,7 @@ func TestSendAllReadAll(t *testing.T) {
 	if expected, got := 10, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 2, farm.repairer.(*mockCoreRepairer).requestCount; expected != got {
+	if expected, got := 2, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 	if totalOpenChannelCount(clusters) > 0 {
@@ -156,7 +159,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	if expected, got := 3, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 0, farm.repairer.(*mockCoreRepairer).requestCount; expected != got {
+	if expected, got := 0, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -174,7 +177,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	if expected, got := 6, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 1, farm.repairer.(*mockCoreRepairer).requestCount; expected != got {
+	if expected, got := 1, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -199,7 +202,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	if expected, got := 7, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 1, farm.repairer.(*mockCoreRepairer).requestCount; expected != got {
+	if expected, got := 1, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
 		// Repair count still 1.
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
@@ -219,7 +222,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	if expected, got := 10, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 2, farm.repairer.(*mockCoreRepairer).requestCount; expected != got {
+	if expected, got := 2, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -242,7 +245,7 @@ func TestSendVarReadFirstLinger(t *testing.T) {
 	if expected, got := 3, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 0, farm.repairer.(*mockCoreRepairer).requestCount; expected != got {
+	if expected, got := 0, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -256,7 +259,7 @@ func TestSendVarReadFirstLinger(t *testing.T) {
 	if expected, got := 4, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 0, farm.repairer.(*mockCoreRepairer).requestCount; expected != got {
+	if expected, got := 0, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -277,7 +280,7 @@ func TestSendVarReadFirstLinger(t *testing.T) {
 	if expected, got := 3, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 0, farm.repairer.(*mockCoreRepairer).requestCount; expected != got {
+	if expected, got := 0, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
