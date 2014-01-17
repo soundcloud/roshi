@@ -214,6 +214,11 @@ However, **Roshi fundamentally does not guarantee perfect data durability**.
 Therefore, Roshi should not be used as a source of truth, but only as an
 intermediate store for performance critical data.
 
+### Authentication, authorization, validation
+
+In case it's not obvious, Roshi performs no authentication, authorization, or
+any validation of input data. Clients must implement those things themselves.
+
 # Architecture
 
 Roshi has a layered architecture, with each layer performing a specific
