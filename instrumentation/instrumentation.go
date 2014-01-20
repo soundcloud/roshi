@@ -118,7 +118,7 @@ func (i NopInstrumentation) DeleteRecordDuration(time.Duration) {}
 // DeleteQuorumFailure satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) DeleteQuorumFailure() {}
 
-// RepairRequestCall satisfies the Instrumnetation interface but does no work.
+// RepairCall satisfies the Instrumnetation interface but does no work.
 func (i NopInstrumentation) RepairCall() {}
 
 // RepairRequestCount satisfies the Instrumnetation interface but does no work.
@@ -136,7 +136,7 @@ func (i NopInstrumentation) RepairCheckCompleteFailure() {}
 // RepairCheckDuration satisfies the Instrumnetation interface but does no work.
 func (i NopInstrumentation) RepairCheckDuration(time.Duration) {}
 
-// RepairRedundant satisfies the Instrumnetation interface but does no work.
+// RepairCheckRedundant satisfies the Instrumnetation interface but does no work.
 func (i NopInstrumentation) RepairCheckRedundant() {}
 
 // RepairWriteCount satisfies the Instrumnetation interface but does no work.
