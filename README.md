@@ -5,6 +5,8 @@ inline garbage collection. Roshi is a stateless, distributed layer on top of
 Redis and is implemented in Go. It is partition tolerant, highly available and
 eventually consistent.
 
+![Roshi](http://media.animevice.com/uploads/2/29874/517557-tortue_gniale.png)
+
 At a high level, Roshi maintains sets of values, with each set ordered
 according to (external) timestamp, newest-first. Roshi provides the following
 API:
