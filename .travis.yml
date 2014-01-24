@@ -1,0 +1,15 @@
+language: go
+
+go:
+    - 1.2
+    - tip
+
+services:
+    - redis-server
+
+env:
+    - ADDRESSES=localhost:6379
+
+script:
+    - go test -v ./...
+
