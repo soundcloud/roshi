@@ -19,6 +19,8 @@ clusters; multiple identical clusters, normally at least 3, form a **farm**.
 Roshi leverages CRDT semantics to ensure consistency without explicit
 consensus.
 
+[![Build Status](https://travis-ci.org/soundcloud/roshi.png)](https://travis-ci.org/soundcloud/roshi)
+
 # Theory and system properties
 
 Roshi is a distributed system, for two reasons: it's made for datasets that

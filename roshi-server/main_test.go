@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gorilla/pat"
 	"github.com/soundcloud/roshi/common"
+	"github.com/soundcloud/roshi/vendor/pat"
 )
 
 func TestHandleInsert(t *testing.T) {

@@ -11,5 +11,11 @@ env:
     - ADDRESSES=localhost:6379
 
 script:
-    - go test -v ./...
+    - go test -v github.com/soundcloud/roshi/common
+    - go test -v github.com/soundcloud/roshi/instrumentation
+    - go test -v github.com/soundcloud/roshi/shard
+    - go test -v github.com/soundcloud/roshi/cluster
+    - go test -v github.com/soundcloud/roshi/farm
+    - go test -v github.com/soundcloud/roshi/roshi-server
+
 
