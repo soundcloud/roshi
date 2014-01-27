@@ -4,6 +4,7 @@ package cluster
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 
@@ -20,6 +21,7 @@ type Cluster interface {
 	Selecter
 	Deleter
 	Scorer
+	Scanner
 }
 
 // Inserter defines the method to add elements to a sorted set. A key-member's
@@ -48,6 +50,12 @@ type Deleter interface {
 // (true = inserted).
 type Scorer interface {
 	Score(key, member string) (float64, bool, error)
+}
+
+// Scanner emits all keys in the keyspace over a returned channel. When the
+// keys are exhaused, the channel is closed.
+type Scanner interface {
+	Keys() chan string
 }
 
 const (
@@ -243,6 +251,24 @@ func (c *cluster) Score(key, member string) (float64, bool, error) {
 		return err
 	})
 	return score, inserted, err
+}
+
+// Keys implements the Scanner interface.
+func (c *cluster) Keys() chan string {
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		for index := 0; index < c.shards.Size(); index++ {
+			cursor := 0
+			if err := c.shards.WithIndex(index, func(conn redis.Conn) error {
+				reply, err := conn.Do(fmt.Sprintf("SCAN %d", cursor))
+			}); err != nil {
+				log.Printf("cluster: during Keys: %s", err)
+				return
+			}
+		}
+	}()
+	return ch
 }
 
 func pipelineInsert(conn redis.Conn, tuples []common.KeyScoreMember, maxSize int) error {
