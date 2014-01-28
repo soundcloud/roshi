@@ -41,11 +41,12 @@ func main() {
 		redisMCPI                 = flag.Int("redis.mcpi", 10, "Max connections per Redis instance")
 		redisHash                 = flag.String("redis.hash", "murmur3", "Redis hash function: murmur3, fnv, fnva")
 		redisReadStrategy         = flag.String("redis.read.strategy", "SendAllReadAll", "Redis read strategy: SendAllReadAll, SendOneReadOne, SendAllReadFirstLinger, SendVarReadFirstLinger")
-		redisReadThresholdRate    = flag.Int("redis.read.threshold.rate", 10, "Baseline SendAll reads per sec, additional reads are SendOne (SendVarReadFirstLinger strategy only)")
+		redisReadThresholdRate    = flag.Int("redis.read.threshold.rate", 100, "Baseline SendAll keys read per sec, additional keys are SendOne (SendVarReadFirstLinger strategy only)")
 		redisReadThresholdLatency = flag.Duration("redis.read.threshold.latency", 50*time.Millisecond, "If a SendOne read has not returned anything after this latency, it's promoted to SendAll (SendVarReadFirstLinger strategy only)")
 		redisRepairer             = flag.String("redis.repairer", "RateLimited", "Redis repairer: RateLimited, Nop")
 		redisMaxRepairRate        = flag.Int("redis.repair.maxrate", 10, "Max repairs per second (RateLimited repairer only)")
 		redisMaxRepairBacklog     = flag.Int("redis.repair.maxbacklog", 100000, "Max number of queued repairs (RateLimited repairer only)")
+		redisWalkerRate           = flag.Int("redis.walker.rate", 50, "Max keys read per second for data walking. Reduced by the current rate of incoming keys to be read. Set to 0 to disable data walking.")
 		maxSize                   = flag.Int("max.size", 10000, "Maximum number of events per key")
 		statsdAddress             = flag.String("statsd.address", "", "Statsd address (blank to disable)")
 		statsdSampleRate          = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
@@ -113,6 +114,7 @@ func main() {
 		hashFunc,
 		readStrategy,
 		repairer,
+		*redisWalkerRate,
 		*maxSize,
 		*statsdSampleRate,
 		*statsdBucketPrefix,
@@ -145,6 +147,7 @@ func newFarm(
 	hash func(string) uint32,
 	readStrategy farm.ReadStrategy,
 	repairer farm.Repairer,
+	walkerRate int,
 	maxSize int,
 	statsdSampleRate float64,
 	bucketPrefix string,
@@ -177,6 +180,7 @@ func newFarm(
 		clusters,
 		readStrategy,
 		repairer,
+		walkerRate,
 		instr,
 	), nil
 }

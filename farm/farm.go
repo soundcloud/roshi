@@ -19,10 +19,11 @@ func init() {
 
 // Farm implements CRDT-enabled ZSET methods over many clusters.
 type Farm struct {
-	clusters        []cluster.Cluster
-	readStrategy    coreReadStrategy
-	repairer        coreRepairer
-	instrumentation instrumentation.Instrumentation
+	clusters            []cluster.Cluster
+	readStrategy        coreReadStrategy
+	repairer            coreRepairer
+	reportReadsToWalker chan int
+	instrumentation     instrumentation.Instrumentation
 }
 
 // New creates and returns a new Farm. Instrumentation and repairer may be nil.
@@ -30,6 +31,7 @@ func New(
 	clusters []cluster.Cluster,
 	readStrategy ReadStrategy,
 	repairer Repairer,
+	walkerRate int,
 	instr instrumentation.Instrumentation,
 ) *Farm {
 	if instr == nil {
@@ -44,6 +46,7 @@ func New(
 	}
 	farm.readStrategy = readStrategy(farm)
 	farm.repairer = repairer(farm)
+	farm.startWalker(walkerRate)
 	return farm
 }
 
@@ -69,6 +72,9 @@ func (f *Farm) Select(keys []string, offset, limit int) (map[string][]common.Key
 	if len(keys) <= 0 {
 		return map[string][]common.KeyScoreMember{}, nil
 	}
+	if f.reportReadsToWalker != nil {
+		f.reportReadsToWalker <- len(keys)
+	}
 	return f.readStrategy(keys, offset, limit)
 }
 
@@ -80,6 +86,16 @@ func (f *Farm) Delete(tuples []common.KeyScoreMember) error {
 		func(c cluster.Cluster, a []common.KeyScoreMember) error { return c.Delete(a) },
 		deleteInstrumentation{f.instrumentation},
 	)
+}
+
+func (f *Farm) startWalker(walkerRate int) {
+	f.reportReadsToWalker = make(chan int)
+	go func() {
+		for {
+			_ = <-f.reportReadsToWalker
+		}
+	}()
+	// TODO: implement
 }
 
 func (f *Farm) write(

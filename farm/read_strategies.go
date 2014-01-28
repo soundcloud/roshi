@@ -154,15 +154,14 @@ func SendAllReadFirstLinger(farm *Farm) coreReadStrategy {
 // promote "SendOne" to "SendAll", set thresholdLatency to a negative
 // duration.
 func SendVarReadFirstLinger(thresholdReadsPerSec int, thresholdLatency time.Duration) func(*Farm) coreReadStrategy {
-	permitSendAll := make(chan bool)
-	var minWaitAfterSendAll time.Duration
+	requestSendAll := make(chan int)
 	if thresholdReadsPerSec > 0 {
-		minWaitAfterSendAll = time.Second / time.Duration(thresholdReadsPerSec)
+		minWaitPerKeyAfterSendAll := time.Second / time.Duration(thresholdReadsPerSec)
 		go func() {
 			// Handing out "SendAll permits" at a limited rate.
 			for {
-				permitSendAll <- true
-				time.Sleep(minWaitAfterSendAll)
+				numberOfKeys := <-requestSendAll
+				time.Sleep(minWaitPerKeyAfterSendAll * time.Duration(numberOfKeys))
 			}
 		}()
 	}
@@ -176,7 +175,7 @@ func SendVarReadFirstLinger(thresholdReadsPerSec int, thresholdLatency time.Dura
 			switch {
 			case thresholdReadsPerSec > 0:
 				select {
-				case <-permitSendAll:
+				case requestSendAll <- len(keys):
 					maySendAll = true
 				default:
 					maySendAll = false
