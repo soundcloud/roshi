@@ -5,6 +5,7 @@ package cluster
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
 	"sync"
 
@@ -52,8 +53,13 @@ type Scorer interface {
 	Score(key, member string) (float64, bool, error)
 }
 
-// Scanner emits all keys in the keyspace over a returned channel. When the
-// keys are exhaused, the channel is closed.
+// Scanner emits all keys in the keyspace over a returned
+// channel. When the keys are exhaused, the channel is closed. The
+// order in which keys are emitted is unpredictable. Scanning is
+// performed one Redis instance at a time in random order of the
+// instances. If an instance is down at the time it is tried to be
+// scanned, it is skipped (no retries). See also implications of the
+// Redis SCAN command.
 type Scanner interface {
 	Keys() chan string
 }
@@ -222,7 +228,6 @@ func (c *cluster) Delete(tuples []common.KeyScoreMember) error {
 	errChan := make(chan error, len(m))
 	for index, tuples := range m {
 		go func(index int, tuples []common.KeyScoreMember) {
-
 			errChan <- c.shards.WithIndex(index, func(conn redis.Conn) error {
 				return pipelineDelete(conn, tuples, c.maxSize)
 			})
@@ -258,13 +263,30 @@ func (c *cluster) Keys() chan string {
 	ch := make(chan string)
 	go func() {
 		defer close(ch)
-		for index := 0; index < c.shards.Size(); index++ {
+		for index := range rand.Perm(c.shards.Size()) {
 			cursor := 0
 			if err := c.shards.WithIndex(index, func(conn redis.Conn) error {
-				reply, err := conn.Do(fmt.Sprintf("SCAN %d", cursor))
+				values, err := redis.Values(conn.Do(fmt.Sprintf("SCAN %d", cursor)))
+				if err != nil {
+					return err
+				}
+				if n := len(values); n != 2 {
+					return fmt.Errorf("received %d values from Redis, expected exactly 2", n)
+				}
+				if cursor, err = redis.Int(values[0], nil); err != nil {
+					return err
+				}
+				keys, err := redis.Strings(values[1], nil)
+				if err != nil {
+					return err
+				}
+				for _, key := range keys {
+					ch <- key
+				}
+				return nil
 			}); err != nil {
-				log.Printf("cluster: during Keys: %s", err)
-				return
+				log.Printf("cluster: during Keys on instance %d: %s", index, err)
+				continue // Skip failed instance.
 			}
 		}
 	}()
