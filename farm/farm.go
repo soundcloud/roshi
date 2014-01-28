@@ -51,41 +51,11 @@ func New(
 // greater than the already-stored scores. As long as over half of the clusters
 // succeed to write all tuples, the overall write succeeds.
 func (f *Farm) Insert(tuples []common.KeyScoreMember) error {
-	// High performance optimization.
-	if len(tuples) <= 0 {
-		return nil
-	}
-	f.instrumentation.InsertCall()
-	f.instrumentation.InsertRecordCount(len(tuples))
-	defer func(began time.Time) {
-		d := time.Now().Sub(began)
-		f.instrumentation.InsertCallDuration(d)
-		f.instrumentation.InsertRecordDuration(d / time.Duration(len(tuples)))
-	}(time.Now())
-
-	// Scatter
-	errChan := make(chan error, len(f.clusters))
-	for _, c := range f.clusters {
-		go func(c cluster.Cluster) {
-			errChan <- c.Insert(tuples)
-		}(c)
-	}
-
-	// Gather
-	errors := []string{}
-	for i := 0; i < cap(errChan); i++ {
-		err := <-errChan
-		if err != nil {
-			errors = append(errors, err.Error())
-		}
-	}
-
-	// Report
-	if float32(len(f.clusters)-len(errors))/float32(len(f.clusters)) <= 0.5 {
-		f.instrumentation.InsertQuorumFailure()
-		return fmt.Errorf("no quorum (%s)", strings.Join(errors, "; "))
-	}
-	return nil
+	return f.write(
+		tuples,
+		func(c cluster.Cluster, a []common.KeyScoreMember) error { return c.Insert(a) },
+		insertInstrumentation{f.instrumentation},
+	)
 }
 
 // Selecter defines a synchronous Select API, implemented by Farm.
@@ -105,38 +75,55 @@ func (f *Farm) Select(keys []string, offset, limit int) (map[string][]common.Key
 // Delete removes each tuple from the underlying clusters, if the score is
 // greater than the already-stored scores.
 func (f *Farm) Delete(tuples []common.KeyScoreMember) error {
+	return f.write(
+		tuples,
+		func(c cluster.Cluster, a []common.KeyScoreMember) error { return c.Delete(a) },
+		deleteInstrumentation{f.instrumentation},
+	)
+}
+
+func (f *Farm) write(
+	tuples []common.KeyScoreMember,
+	action func(cluster.Cluster, []common.KeyScoreMember) error,
+	instr writeInstrumentation,
+) error {
 	// High performance optimization.
 	if len(tuples) <= 0 {
 		return nil
 	}
-	f.instrumentation.DeleteCall()
-	f.instrumentation.DeleteRecordCount(len(tuples))
+	instr.call()
+	instr.recordCount(len(tuples))
 	defer func(began time.Time) {
 		d := time.Now().Sub(began)
-		f.instrumentation.DeleteCallDuration(d)
-		f.instrumentation.DeleteRecordDuration(d / time.Duration(len(tuples)))
+		instr.callDuration(d)
+		instr.recordDuration(d / time.Duration(len(tuples)))
 	}(time.Now())
 
 	// Scatter
 	errChan := make(chan error, len(f.clusters))
 	for _, c := range f.clusters {
 		go func(c cluster.Cluster) {
-			errChan <- c.Delete(tuples)
+			errChan <- action(c, tuples)
 		}(c)
 	}
 
 	// Gather
-	errors := []string{}
+	errors, got, need := []string{}, 0, (cap(errChan)/2)+1
+	haveQuorum := func() bool { return got-len(errors) >= need }
 	for i := 0; i < cap(errChan); i++ {
 		err := <-errChan
 		if err != nil {
 			errors = append(errors, err.Error())
 		}
+		got++
+		if haveQuorum() {
+			break
+		}
 	}
 
 	// Report
-	if float32(len(f.clusters)-len(errors))/float32(len(f.clusters)) <= 0.5 {
-		f.instrumentation.DeleteQuorumFailure()
+	if !haveQuorum() {
+		instr.quorumFailure()
 		return fmt.Errorf("no quorum (%s)", strings.Join(errors, "; "))
 	}
 	return nil
@@ -242,3 +229,31 @@ func (s keyMemberSet) slice() []keyMember {
 	}
 	return a
 }
+
+type writeInstrumentation interface {
+	call()
+	recordCount(int)
+	callDuration(time.Duration)
+	recordDuration(time.Duration)
+	quorumFailure()
+}
+
+type insertInstrumentation struct {
+	instrumentation.Instrumentation
+}
+
+func (i insertInstrumentation) call()                          { i.InsertCall() }
+func (i insertInstrumentation) recordCount(n int)              { i.InsertRecordCount(n) }
+func (i insertInstrumentation) callDuration(d time.Duration)   { i.InsertCallDuration(d) }
+func (i insertInstrumentation) recordDuration(d time.Duration) { i.InsertRecordDuration(d) }
+func (i insertInstrumentation) quorumFailure()                 { i.InsertQuorumFailure() }
+
+type deleteInstrumentation struct {
+	instrumentation.Instrumentation
+}
+
+func (i deleteInstrumentation) call()                          { i.DeleteCall() }
+func (i deleteInstrumentation) recordCount(n int)              { i.DeleteRecordCount(n) }
+func (i deleteInstrumentation) callDuration(d time.Duration)   { i.DeleteCallDuration(d) }
+func (i deleteInstrumentation) recordDuration(d time.Duration) { i.DeleteRecordDuration(d) }
+func (i deleteInstrumentation) quorumFailure()                 { i.DeleteQuorumFailure() }
