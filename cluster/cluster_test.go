@@ -14,10 +14,10 @@ import (
 	"github.com/soundcloud/roshi/vendor/redigo/redis"
 )
 
-func TestInsertSelect(t *testing.T) {
-	addresses := os.Getenv("ADDRESSES")
+func TestInsertSelectKeys(t *testing.T) {
+	addresses := os.Getenv("TEST_REDIS_ADDRESSES")
 	if addresses == "" {
-		t.Logf("To run this test, set the ADDRESSES environment variable")
+		t.Logf("To run this test, set the TEST_REDIS_ADDRESSES environment variable")
 		return
 	}
 
@@ -124,12 +124,20 @@ func TestInsertSelect(t *testing.T) {
 		}
 		t.Logf("%s: %v OK", key, expected)
 	}
+	keysChannel := c.Keys()
+	keys := map[string]bool{}
+	for key := range keysChannel {
+		keys[key] = true
+	}
+	if got, expected := keys, map[string]bool{"foo": true, "bar": true, "baz": true}; !reflect.DeepEqual(got, expected) {
+		t.Errorf("Expected key set %+v, got %+v", expected, got)
+	}
 }
 
 func TestInsertIdempotency(t *testing.T) {
-	addresses := os.Getenv("ADDRESSES")
+	addresses := os.Getenv("TEST_REDIS_ADDRESSES")
 	if addresses == "" {
-		t.Logf("To run this test, set the ADDRESSES environment variable")
+		t.Logf("To run this test, set the TEST_REDIS_ADDRESSES environment variable")
 		return
 	}
 
@@ -218,9 +226,9 @@ func TestInsertIdempotency(t *testing.T) {
 }
 
 func TestInsertMaxSize(t *testing.T) {
-	addresses := os.Getenv("ADDRESSES")
+	addresses := os.Getenv("TEST_REDIS_ADDRESSES")
 	if addresses == "" {
-		t.Logf("To run this test, set the ADDRESSES environment variable")
+		t.Logf("To run this test, set the TEST_REDIS_ADDRESSES environment variable")
 		return
 	}
 
