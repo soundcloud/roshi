@@ -182,9 +182,15 @@ func (c *mockCluster) Score(key, member string) (float64, bool, error) {
 func (c *mockCluster) Keys() chan string {
 	atomic.AddInt32(&c.countKeys, 1)
 	ch := make(chan string)
+	m := map[string]common.KeyScoreMembers{}
+	// Copy c.m so that at least after this method has returned,
+	// we don't run into issues with concurrent modifications.
+	for k, v := range c.m {
+		m[k] = v
+	}
 	go func() {
 		defer close(ch)
-		for key := range c.m {
+		for key := range m {
 			ch <- key
 		}
 	}()

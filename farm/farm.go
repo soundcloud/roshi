@@ -46,7 +46,7 @@ func New(
 	}
 	farm.readStrategy = readStrategy(farm)
 	farm.repairer = repairer(farm)
-	farm.startWalker(walkerRate)
+	go farm.startWalker(walkerRate)
 	return farm
 }
 
@@ -89,13 +89,53 @@ func (f *Farm) Delete(tuples []common.KeyScoreMember) error {
 }
 
 func (f *Farm) startWalker(walkerRate int) {
+	if walkerRate == 0 {
+		return
+	}
 	f.reportReadsToWalker = make(chan int)
+	minWaitPerRead := time.Second / time.Duration(walkerRate)
+	timer := time.NewTimer(minWaitPerRead)
+	keyChannel := make(chan string)
+
+	// Start a goroutine that endlessly iterates through all
+	// clusters in random order. (It will visit each cluster
+	// exactly once before starting over.) The keys of each
+	// cluster are sent one after another to the keyChannel.
 	go func() {
 		for {
-			_ = <-f.reportReadsToWalker
+			for _, i := range rand.Perm(len(f.clusters)) {
+				for key := range f.clusters[i].Keys() {
+					keyChannel <- key
+				}
+			}
 		}
 	}()
-	// TODO: implement
+
+	for {
+		select {
+		case reads := <-f.reportReadsToWalker:
+			timer.Reset(time.Duration(reads) * minWaitPerRead)
+		case <-timer.C:
+			go f.Select([]string{<-keyChannel}, 0, int(^uint(0)>>1) /* MaxInt */)
+			// We are only interested in triggering the
+			// read repair, so we throw away the results
+			// and don't check for errors. Our own Select
+			// call will be reported back to us via
+			// f.reportReadsToWalker, which will reset the
+			// timer, which will in turn trigger the next
+			// Select call.
+			//
+			// About the ugly MaxInt hack above:
+			// Unfortunately, the math package only
+			// provides maxint values for those integer
+			// types where it is trivial. For those types
+			// where it is compiler/platform specific, no
+			// maxint value is provided. I guess Go wants
+			// to tell us not to use an int for limit here
+			// (but int32 or int64), so we might do that
+			// one day.
+		}
+	}
 }
 
 func (f *Farm) write(

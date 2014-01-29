@@ -8,12 +8,17 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/instrumentation"
 	"github.com/soundcloud/roshi/shard"
 	"github.com/soundcloud/roshi/vendor/redigo/redis"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 // Cluster defines methods that efficiently provide ZSET semantics on a
 // cluster.
@@ -169,7 +174,7 @@ func (c *cluster) Insert(tuples []common.KeyScoreMember) error {
 	return nil
 }
 
-// Select effeciently performs ZREVRANGEs for each of the passed keys using
+// Select efficiently performs ZREVRANGEs for each of the passed keys using
 // the offset and limit for each. It pushes results to the returned chan as
 // they become available.
 func (c *cluster) Select(keys []string, offset, limit int) <-chan Element {
@@ -264,7 +269,7 @@ func (c *cluster) Keys() chan string {
 	ch := make(chan string)
 	go func() {
 		defer close(ch)
-		for index := range rand.Perm(c.shards.Size()) {
+		for _, index := range rand.Perm(c.shards.Size()) {
 			cursor := 0
 			for {
 				if err := c.shards.WithIndex(index, func(conn redis.Conn) error {
