@@ -4,16 +4,16 @@
 
 Package farm provides a single logical Insert/Select/Delete API on top of
 multiple independent [clusters][cluster]. Package farm ensures that writes
-(Insert and Delete) are made to a quorum of clusters, and uses one of several
-[read strategies](#read_strategies) to perform reads (Select).
+(Insert and Delete) are made to as many clusters as possible, and uses one of
+several [read strategies](#read_strategies) to perform reads (Select).
 
 [cluster]: https://github.com/soundcloud/roshi/blob/master/cluster
 
 ## Writing
 
 Every write is broadcast to each cluster. As soon as the farm has received a
-quorum of successful responses, the write is considered successful, and
-that success is signaled to the client.
+user-specified number of succesful responses, the overall write is considered
+successful, and that success is signaled to the client.
 
 For every single logical key, Roshi maintains two physical keys, representing
 add and remove sets. Each write of a key-score-member tuple results in the
