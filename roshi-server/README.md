@@ -107,7 +107,27 @@ $ curl -Ss -d@delete.json -XDELETE 'http://localhost:6302' | jq .
 
 ## Integrating with your code
 
-Golang clients should `import "github.com/soundcloud/roshi/common"` and
-interact with (i.e. serialize and deserialize) `common.KeyScoreMember` tuples
-directly. That type implements `json.Marshaler` such that base64 encoding and
-decoding is transparent to the user.
+Golang clients that wish to make HTTP requests to roshi-server should
+`import "github.com/soundcloud/roshi/common"` and interact with (i.e. serialize
+and deserialize) `common.KeyScoreMember` tuples directly. That type implements
+`json.Marshaler` such that base64 encoding and decoding is transparent to the
+user.
+
+Clients in other languages should ensure all key and member strings are
+properly base64 encoded.
+
+## Operations
+
+roshi-server expects to interact with a set of independent Redis instances,
+which operators should deploy, monitor, and manage. Roshi assumes a successful
+write to Redis will be persisted; Roshi's durability guarantees are largely
+predicated on the durability of each Redis instance. Please familiarize
+yourself with [Redis persistence][redis-persistence].
+
+[redis-persistence]: http://redis.io/topics/persistence
+
+In general, Redis will use a lot of RAM and comparatively little CPU, and
+roshi-server will use very little RAM and comparatively large amount of CPU.
+It may make sense to co-locate a roshi-server instance with every Redis
+instance. (It's been our experience that a single server-class machine is best
+utilized when it runs multiple Redis instances.)
