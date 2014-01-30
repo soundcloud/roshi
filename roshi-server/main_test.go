@@ -15,6 +15,59 @@ import (
 	"github.com/soundcloud/roshi/vendor/pat"
 )
 
+func TestEvaluateScalarPercentage(t *testing.T) {
+	for _, tuple := range []struct {
+		s        string
+		n        int
+		expected int
+		valid    bool
+	}{
+		{"", 3, -1, false},
+		{"-1%", 3, -1, false},
+		{"abc", 3, -1, false},
+
+		{"0%", 3, -1, false},
+		{"00%", 3, -1, false},
+		{"110%", 3, -1, false},
+
+		{"100%", 1, 1, true},
+		{"100% ", 1, 1, true},
+		{" 100%", 1, 1, true},
+		{"	 100%			", 1, 1, true},
+		{"99%", 1, 1, true},
+		{"50%", 1, 1, true},
+		{"1%", 1, 1, true},
+		{"0%", 1, -1, false},
+
+		{"100%", 3, 3, true},
+		{"99%", 3, 3, true},
+		{"67%", 3, 3, true},
+		{"65%", 3, 2, true},
+		{"51%", 3, 2, true},
+		{"34%", 3, 2, true},
+		{"32%", 3, 1, true},
+
+		{"50%", 5, 3, true},
+		{"50%", 10, 5, true},
+
+		{"1", 1, 1, true},
+		{"1", 2, 1, true},
+		{"1", 3, 1, true},
+		{"1", 99, 1, true},
+		{"99", 1, -1, false},
+	} {
+		got, err := evaluateScalarPercentage(tuple.s, tuple.n)
+		if (tuple.valid && err != nil) || (!tuple.valid && err == nil) {
+			t.Errorf("'%s' of %d: expected valid=%v, got error '%v' (value %d)", tuple.s, tuple.n, tuple.valid, err, got)
+			continue
+		}
+		if tuple.valid && tuple.expected != got {
+			t.Errorf("'%s' of %d: expected %d, got %d", tuple.s, tuple.n, tuple.expected, got)
+			continue
+		}
+	}
+}
+
 func TestHandleInsert(t *testing.T) {
 	farm := newMockFarm()
 	r := pat.New()

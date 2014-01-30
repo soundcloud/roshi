@@ -11,7 +11,7 @@ import (
 
 func TestInsertSelect(t *testing.T) {
 	clusters := newMockClusters(3)
-	farm := New(clusters, SendOneReadOne, NopRepairer, 0, nil)
+	farm := New(clusters, len(clusters), SendOneReadOne, NopRepairer, 0, nil)
 
 	if err := farm.Insert([]common.KeyScoreMember{
 		common.KeyScoreMember{Key: "foo", Score: 5, Member: "five"},
@@ -48,7 +48,7 @@ func TestInsertSelect(t *testing.T) {
 
 func TestOffsetLimit(t *testing.T) {
 	clusters := newMockClusters(3)
-	f := New(clusters, SendAllReadAll, NopRepairer, 0, nil)
+	f := New(clusters, len(clusters), SendAllReadAll, NopRepairer, 0, nil)
 
 	if err := f.Insert([]common.KeyScoreMember{
 		common.KeyScoreMember{Key: "foo", Score: 5, Member: "five"},
@@ -87,7 +87,7 @@ func TestSendAllReadAllSelectAfterNoQuorum(t *testing.T) {
 	// Build a farm of 3 clusters: 2 failing, 1 successful
 	clusters := newFailingMockClusters(2)
 	clusters = append(clusters, newMockCluster())
-	f := New(clusters, SendAllReadAll, NopRepairer, 0, nil)
+	f := New(clusters, len(clusters), SendAllReadAll, NopRepairer, 0, nil)
 
 	// Make a single KSM.
 	foo := common.KeyScoreMember{Key: "foo", Score: 1.0, Member: "bar"}
@@ -123,7 +123,7 @@ func TestWalkerReadRepair(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	_ = New(clusters, SendAllReadAll, RateLimitedRepairer(10, 0), 10, nil)
+	_ = New(clusters, len(clusters), SendAllReadAll, RateLimitedRepairer(10, 0), 10, nil)
 	time.Sleep(time.Second)
 
 	// Keys should have been called for all clusters by now.
