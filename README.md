@@ -115,11 +115,11 @@ replication factor is 3. Each Roshi instance can serve all requests (Insert,
 Delete, Select) for a client. Roshi has two methods of replicating data:
 during write, and during read-repair.
 
-A write (Insert or Delete) is sent to all clusters. It returns success the
-moment a quorum of the clusters return success. Unsuccessful clusters might
-either have been too slow (but still accepted the write) or failed (due to a
-network partition or an instance crash). In case of failure, read-repair might
-be triggered on a later read.
+A write (Insert or Delete) is sent to all clusters. The overall operation
+returns success the moment a user-defined number of clusters return success.
+Unsuccessful clusters might either have been too slow (but still accepted the
+write) or failed (due to a network partition or an instance crash). In case of
+failure, read-repair might be triggered on a later read.
 
 A read (Select) is dependent on the read strategy employed. If the strategy
 queries several clusters, it might be able to spot disagreement in the
