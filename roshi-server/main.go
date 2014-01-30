@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	logpkg "log"
+	"math"
 	"net/http"
 	_ "net/http/pprof"
 	"net/url"
@@ -34,24 +35,25 @@ var (
 
 func main() {
 	var (
-		redisInstances            = flag.String("redis.instances", "", "Semicolon-separated list of comma-separated lists of Redis instances")
-		redisConnectTimeout       = flag.Duration("redis.connect.timeout", 3*time.Second, "Redis connect timeout")
-		redisReadTimeout          = flag.Duration("redis.read.timeout", 3*time.Second, "Redis read timeout")
-		redisWriteTimeout         = flag.Duration("redis.write.timeout", 3*time.Second, "Redis write timeout")
-		redisMCPI                 = flag.Int("redis.mcpi", 10, "Max connections per Redis instance")
-		redisHash                 = flag.String("redis.hash", "murmur3", "Redis hash function: murmur3, fnv, fnva")
-		redisReadStrategy         = flag.String("redis.read.strategy", "SendAllReadAll", "Redis read strategy: SendAllReadAll, SendOneReadOne, SendAllReadFirstLinger, SendVarReadFirstLinger")
-		redisReadThresholdRate    = flag.Int("redis.read.threshold.rate", 10, "Baseline SendAll reads per sec, additional reads are SendOne (SendVarReadFirstLinger strategy only)")
-		redisReadThresholdLatency = flag.Duration("redis.read.threshold.latency", 50*time.Millisecond, "If a SendOne read has not returned anything after this latency, it's promoted to SendAll (SendVarReadFirstLinger strategy only)")
-		redisRepairer             = flag.String("redis.repairer", "RateLimited", "Redis repairer: RateLimited, Nop")
-		redisMaxRepairRate        = flag.Int("redis.repair.maxrate", 10, "Max repairs per second (RateLimited repairer only)")
-		redisMaxRepairBacklog     = flag.Int("redis.repair.maxbacklog", 100000, "Max number of queued repairs (RateLimited repairer only)")
-		maxSize                   = flag.Int("max.size", 10000, "Maximum number of events per key")
-		statsdAddress             = flag.String("statsd.address", "", "Statsd address (blank to disable)")
-		statsdSampleRate          = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
-		statsdBucketPrefix        = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
-		httpCircuitBreaker        = flag.Bool("http.circuit.breaker", true, "Enable HTTP server circuit breaker")
-		httpAddress               = flag.String("http.address", ":6302", "HTTP listen address")
+		redisInstances           = flag.String("redis.instances", "", "Semicolon-separated list of comma-separated lists of Redis instances")
+		redisConnectTimeout      = flag.Duration("redis.connect.timeout", 3*time.Second, "Redis connect timeout")
+		redisReadTimeout         = flag.Duration("redis.read.timeout", 3*time.Second, "Redis read timeout")
+		redisWriteTimeout        = flag.Duration("redis.write.timeout", 3*time.Second, "Redis write timeout")
+		redisMCPI                = flag.Int("redis.mcpi", 10, "Max connections per Redis instance")
+		redisHash                = flag.String("redis.hash", "murmur3", "Redis hash function: murmur3, fnv, fnva")
+		farmWriteQuorum          = flag.String("farm.write.quorum", "100%", "Write quorum, either number of clusters (2) or percentage of clusters (51%)")
+		farmReadStrategy         = flag.String("farm.read.strategy", "SendAllReadAll", "Farm read strategy: SendAllReadAll, SendOneReadOne, SendAllReadFirstLinger, SendVarReadFirstLinger")
+		farmReadThresholdRate    = flag.Int("farm.read.threshold.rate", 10, "Baseline SendAll reads per sec, additional reads are SendOne (SendVarReadFirstLinger strategy only)")
+		farmReadThresholdLatency = flag.Duration("farm.read.threshold.latency", 50*time.Millisecond, "If a SendOne read has not returned anything after this latency, it's promoted to SendAll (SendVarReadFirstLinger strategy only)")
+		farmRepairer             = flag.String("farm.repairer", "RateLimited", "Farm repairer: RateLimited, Nop")
+		farmMaxRepairRate        = flag.Int("farm.repair.maxrate", 10, "Max repairs per second (RateLimited repairer only)")
+		farmMaxRepairBacklog     = flag.Int("farm.repair.maxbacklog", 100000, "Max number of queued repairs (RateLimited repairer only)")
+		maxSize                  = flag.Int("max.size", 10000, "Maximum number of events per key")
+		statsdAddress            = flag.String("statsd.address", "", "Statsd address (blank to disable)")
+		statsdSampleRate         = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
+		statsdBucketPrefix       = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
+		httpCircuitBreaker       = flag.Bool("http.circuit.breaker", true, "Enable HTTP server circuit breaker")
+		httpAddress              = flag.String("http.address", ":6302", "HTTP listen address")
 	)
 	flag.Parse()
 	log.Printf("GOMAXPROCS %d", runtime.GOMAXPROCS(-1))
@@ -67,7 +69,7 @@ func main() {
 
 	// Parse read strategy.
 	var readStrategy farm.ReadStrategy
-	switch strings.ToLower(*redisReadStrategy) {
+	switch strings.ToLower(*farmReadStrategy) {
 	case "sendallreadall":
 		readStrategy = farm.SendAllReadAll
 	case "sendonereadone":
@@ -75,21 +77,21 @@ func main() {
 	case "sendallreadfirstlinger":
 		readStrategy = farm.SendAllReadFirstLinger
 	case "sendvarreadfirstlinger":
-		readStrategy = farm.SendVarReadFirstLinger(*redisReadThresholdRate, *redisReadThresholdLatency)
+		readStrategy = farm.SendVarReadFirstLinger(*farmReadThresholdRate, *farmReadThresholdLatency)
 	default:
-		log.Fatalf("unknown read strategy '%s'", *redisReadStrategy)
+		log.Fatalf("unknown read strategy '%s'", *farmReadStrategy)
 	}
-	log.Printf("using %s read strategy", *redisReadStrategy)
+	log.Printf("using %s read strategy", *farmReadStrategy)
 
 	// Parse repairer.
 	var repairer farm.Repairer
-	switch strings.ToLower(*redisRepairer) {
+	switch strings.ToLower(*farmRepairer) {
 	case "nop":
 		repairer = farm.NopRepairer
 	case "ratelimited":
-		repairer = farm.RateLimitedRepairer(*redisMaxRepairRate, *redisMaxRepairBacklog)
+		repairer = farm.RateLimitedRepairer(*farmMaxRepairRate, *farmMaxRepairBacklog)
 	default:
-		log.Fatalf("unknown repairer '%s'", *redisRepairer)
+		log.Fatalf("unknown repairer '%s'", *farmRepairer)
 	}
 
 	// Parse hash function.
@@ -108,6 +110,7 @@ func main() {
 	// Build the farm.
 	farm, err := newFarm(
 		*redisInstances,
+		*farmWriteQuorum,
 		*redisConnectTimeout, *redisReadTimeout, *redisWriteTimeout,
 		*redisMCPI,
 		hashFunc,
@@ -140,6 +143,7 @@ func main() {
 
 func newFarm(
 	redisInstances string,
+	writeQuorumStr string,
 	connectTimeout, readTimeout, writeTimeout time.Duration,
 	redisMCPI int,
 	hash func(string) uint32,
@@ -149,8 +153,10 @@ func newFarm(
 	statsdSampleRate float64,
 	bucketPrefix string,
 ) (*farm.Farm, error) {
+	// Build instrumentation.
 	instr := statsd.New(stats, float32(statsdSampleRate), bucketPrefix)
 
+	// Parse out and build clusters.
 	clusters := []cluster.Cluster{}
 	for i, clusterInstances := range strings.Split(redisInstances, ";") {
 		addresses := stripBlank(strings.Split(clusterInstances, ","))
@@ -173,8 +179,16 @@ func newFarm(
 		return nil, fmt.Errorf("no cluster(s)")
 	}
 
+	// Evaluate writeQuorum.
+	writeQuorum, err := evaluateScalarPercentage(writeQuorumStr, len(clusters))
+	if err != nil {
+		return nil, err
+	}
+
+	// Build and return Farm.
 	return farm.New(
 		clusters,
+		writeQuorum,
 		readStrategy,
 		repairer,
 		instr,
@@ -350,4 +364,35 @@ func stripBlank(src []string) []string {
 		dst = append(dst, s)
 	}
 	return dst
+}
+
+// evaluateScalarPercentage takes a string of the form "P%" (percent) or "S"
+// (straight scalar value), and evaluates that against the passed total n.
+// Percentages mean at least that percent; for example, "50%" of 3 evaluates
+// to 2. It is an error if the passed string evaluates to less than 1 or more
+// than n.
+func evaluateScalarPercentage(s string, n int) (int, error) {
+	if n <= 0 {
+		return -1, fmt.Errorf("n must be at least 1")
+	}
+
+	s = strings.TrimSpace(s)
+	var value int
+	if strings.HasSuffix(s, "%") {
+		percentInt, err := strconv.ParseInt(s[:len(s)-1], 10, 64)
+		if err != nil || percentInt <= 0 || percentInt > 100 {
+			return -1, fmt.Errorf("bad percentage input '%s'", s)
+		}
+		value = int(math.Ceil((float64(percentInt) / 100.0) * float64(n)))
+	} else {
+		value64, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return -1, fmt.Errorf("bad scalar input '%s'", s)
+		}
+		value = int(value64)
+	}
+	if value <= 0 || value > n {
+		return -1, fmt.Errorf("with n=%d, value=%d (from '%s') is invalid", n, value, s)
+	}
+	return value, nil
 }

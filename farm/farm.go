@@ -20,14 +20,24 @@ func init() {
 // Farm implements CRDT-enabled ZSET methods over many clusters.
 type Farm struct {
 	clusters        []cluster.Cluster
+	writeQuorum     int
 	readStrategy    coreReadStrategy
 	repairer        coreRepairer
 	instrumentation instrumentation.Instrumentation
 }
 
-// New creates and returns a new Farm. Instrumentation and repairer may be nil.
+// New creates and returns a new Farm.
+//
+// Writes are always sent to all clusters, and writeQuorum determines how many
+// individual successful responses need to be received before the client
+// receives an overall success. Reads are sent to clusters according to the
+// passed ReadStrategy.
+//
+// Clusters, writeQuorum, and readStrategy are required. Repairer and
+// instrumentation may be nil.
 func New(
 	clusters []cluster.Cluster,
+	writeQuorum int,
 	readStrategy ReadStrategy,
 	repairer Repairer,
 	instr instrumentation.Instrumentation,
@@ -40,6 +50,7 @@ func New(
 	}
 	farm := &Farm{
 		clusters:        clusters,
+		writeQuorum:     writeQuorum,
 		instrumentation: instr,
 	}
 	farm.readStrategy = readStrategy(farm)
@@ -108,7 +119,7 @@ func (f *Farm) write(
 	}
 
 	// Gather
-	errors, got, need := []string{}, 0, (cap(errChan)/2)+1
+	errors, got, need := []string{}, 0, f.writeQuorum
 	haveQuorum := func() bool { return got-len(errors) >= need }
 	for i := 0; i < cap(errChan); i++ {
 		err := <-errChan
