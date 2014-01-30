@@ -14,8 +14,8 @@ that member.
 [zset]: http://redis.io/commands#sorted-set
 
 All elements of the KeyScoreMember tuple are expected to be provided by the
-client. As scores are typically timestamps, the important consideration is
-that cluster is totally reliant on an external clock.
+client. As scores are typically timestamps, an important consideration is that
+cluster is totally reliant on an external clock.
 
 ## Associative, commutative, idempotent
 
