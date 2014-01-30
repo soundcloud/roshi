@@ -39,9 +39,9 @@ consensus).
 
 Operations on CRDTs need to adhere [to the following rules][mixu]:
 
-- Associativity (a+(b+c)=(a+b)+c), so that grouping doesn't matter
-- Commutativity (a+b=b+a), so that order of application doesn't matter
-- Idempotence (a+a=a), so that duplication doesn't matter
+- Associativity (a+(b+c)=(a+b)+c), so that grouping doesn't matter.
+- Commutativity (a+b=b+a), so that order of application doesn't matter.
+- Idempotence (a+a=a), so that duplication doesn't matter.
 
 Data types as well as operations have to be specifically crafted to meet these
 rules. CRDTs have known implementations for (among others) counters,
@@ -50,8 +50,8 @@ the Last-Writer-Wins-element-set (LWW-element-set).
 
 This is an intuitive description of the LWW-element-set:
 
-* An element is in the set, if its most-recent operation was an add
-* An element is not in the set, if its most-recent operation was a remove
+- An element is in the set, if its most-recent operation was an add.
+- An element is not in the set, if its most-recent operation was a remove.
 
 A more formal description of a LWW-element-set, as informed by
 [Shapiro][shapiro], is as follows: A set S is represented by two internal
@@ -116,10 +116,10 @@ Delete, Select) for a client. Roshi has two methods of replicating data:
 during write, and during read-repair.
 
 A write (Insert or Delete) is sent to all clusters. It returns success the
-moment more than half (N/2 + 1) of the clusters return success. Unsuccessful
-clusters might either have been too slow (but still accepted the write) or
-failed (due to a network partition or an instance crash). In case of failure,
-read-repair might be triggered on a later read.
+moment a quorum of the clusters return success. Unsuccessful clusters might
+either have been too slow (but still accepted the write) or failed (due to a
+network partition or an instance crash). In case of failure, read-repair might
+be triggered on a later read.
 
 A read (Select) is dependent on the read strategy employed. If the strategy
 queries several clusters, it might be able to spot disagreement in the
