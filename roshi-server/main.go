@@ -351,7 +351,3 @@ func stripBlank(src []string) []string {
 	}
 	return dst
 }
-
-type writer struct{ *logpkg.Logger }
-
-func (w writer) Write(p []byte) (int, error) { w.Print(string(p)); return len(p), nil }
