@@ -13,6 +13,9 @@ env:
 before_script:
     - sh -c "sleep 5"  # give Redis a chance to start
 
+before_script:
+    - sh -c "sleep 5"  # give Redis a chance to start
+
 script:
     - go test -v github.com/soundcloud/roshi/common
     - go test -v github.com/soundcloud/roshi/instrumentation
