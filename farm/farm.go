@@ -11,6 +11,13 @@ import (
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/instrumentation"
+	"github.com/soundcloud/roshi/ratepolice"
+)
+
+const (
+	// MaxInt is what you think it is. Unfortunately not provided
+	// by the go math package.
+	MaxInt = int(^uint(0) >> 1)
 )
 
 func init() {
@@ -19,12 +26,12 @@ func init() {
 
 // Farm implements CRDT-enabled ZSET methods over many clusters.
 type Farm struct {
-	clusters            []cluster.Cluster
-	writeQuorum         int
-	readStrategy        coreReadStrategy
-	repairer            coreRepairer
-	reportReadsToWalker chan int
-	instrumentation     instrumentation.Instrumentation
+	clusters        []cluster.Cluster
+	writeQuorum     int
+	readStrategy    coreReadStrategy
+	repairer        coreRepairer
+	ratePolice      ratepolice.RatePolice
+	instrumentation instrumentation.Instrumentation
 }
 
 // New creates and returns a new Farm.
@@ -34,16 +41,20 @@ type Farm struct {
 // receives an overall success. Reads are sent to clusters according to the
 // passed ReadStrategy.
 //
-// Clusters, writeQuorum, and readStrategy are required. Repairer and
-// instrumentation may be nil.
+// Clusters, writeQuorum, and readStrategy are required. Repairer, rp and
+// instr may be nil.
 func New(
 	clusters []cluster.Cluster,
 	writeQuorum int,
 	readStrategy ReadStrategy,
 	repairer Repairer,
 	walkerRate int,
+	rp ratepolice.RatePolice,
 	instr instrumentation.Instrumentation,
 ) *Farm {
+	if rp == nil {
+		rp = ratepolice.NewNop()
+	}
 	if instr == nil {
 		instr = instrumentation.NopInstrumentation{}
 	}
@@ -53,6 +64,7 @@ func New(
 	farm := &Farm{
 		clusters:        clusters,
 		writeQuorum:     writeQuorum,
+		ratePolice:      rp,
 		instrumentation: instr,
 	}
 	farm.readStrategy = readStrategy(farm)
@@ -83,9 +95,7 @@ func (f *Farm) Select(keys []string, offset, limit int) (map[string][]common.Key
 	if len(keys) <= 0 {
 		return map[string][]common.KeyScoreMember{}, nil
 	}
-	if f.reportReadsToWalker != nil {
-		f.reportReadsToWalker <- len(keys)
-	}
+	f.ratePolice.Report(len(keys))
 	return f.readStrategy(keys, offset, limit)
 }
 
@@ -103,9 +113,6 @@ func (f *Farm) startWalker(walkerRate int) {
 	if walkerRate == 0 {
 		return
 	}
-	f.reportReadsToWalker = make(chan int)
-	minWaitPerRead := time.Second / time.Duration(walkerRate)
-	timer := time.NewTimer(minWaitPerRead)
 	keyChannel := make(chan string)
 
 	// Start a goroutine that endlessly iterates through all
@@ -114,38 +121,38 @@ func (f *Farm) startWalker(walkerRate int) {
 	// cluster are sent one after another to the keyChannel.
 	go func() {
 		for {
+			anythingSent := false
+			// TODO: Add instrumentation to count completed nodes,
+			// completed clusters, and completed cycles.
 			for _, i := range rand.Perm(len(f.clusters)) {
 				for key := range f.clusters[i].Keys() {
 					keyChannel <- key
+					anythingSent = true
 				}
+			}
+			if !anythingSent {
+				// Don't spin too quickly in case of an
+				// empty cluster.
+				time.Sleep(time.Second)
 			}
 		}
 	}()
 
 	for {
-		select {
-		case reads := <-f.reportReadsToWalker:
-			timer.Reset(time.Duration(reads) * minWaitPerRead)
-		case <-timer.C:
-			go f.Select([]string{<-keyChannel}, 0, int(^uint(0)>>1) /* MaxInt */)
-			// We are only interested in triggering the
-			// read repair, so we throw away the results
-			// and don't check for errors. Our own Select
-			// call will be reported back to us via
-			// f.reportReadsToWalker, which will reset the
-			// timer, which will in turn trigger the next
-			// Select call.
-			//
-			// About the ugly MaxInt hack above:
-			// Unfortunately, the math package only
-			// provides maxint values for those integer
-			// types where it is trivial. For those types
-			// where it is compiler/platform specific, no
-			// maxint value is provided. I guess Go wants
-			// to tell us not to use an int for limit here
-			// (but int32 or int64), so we might do that
-			// one day.
+		batchSize := f.ratePolice.Request(walkerRate)
+		if batchSize <= 0 {
+			// Too much traffic. Wait for a sec and try again.
+			time.Sleep(time.Second)
+			continue
 		}
+		keys := []string{}
+		for ; batchSize > 0; batchSize-- {
+			keys = append(keys, <-keyChannel)
+		}
+		go f.Select(keys, 0, MaxInt)
+		// We are only interested in triggering the
+		// read repair, so we throw away the results
+		// and don't check for errors.
 	}
 }
 

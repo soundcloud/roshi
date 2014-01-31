@@ -22,10 +22,16 @@ import (
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/farm"
 	"github.com/soundcloud/roshi/instrumentation/statsd"
+	"github.com/soundcloud/roshi/ratepolice"
 	"github.com/soundcloud/roshi/shard"
 	"github.com/soundcloud/roshi/vendor/g2s"
 	"github.com/soundcloud/roshi/vendor/handy/breaker"
 	"github.com/soundcloud/roshi/vendor/pat"
+)
+
+const (
+	ratePoliceMovingAverageDuration = 5 * time.Second
+	ratePoliceNumberOfBuckets       = 20
 )
 
 var (
@@ -43,10 +49,10 @@ func main() {
 		redisHash                = flag.String("redis.hash", "murmur3", "Redis hash function: murmur3, fnv, fnva")
 		farmWriteQuorum          = flag.String("farm.write.quorum", "100%", "Write quorum, either number of clusters (2) or percentage of clusters (51%)")
 		farmReadStrategy         = flag.String("farm.read.strategy", "SendAllReadAll", "Farm read strategy: SendAllReadAll, SendOneReadOne, SendAllReadFirstLinger, SendVarReadFirstLinger")
-		farmReadThresholdRate    = flag.Int("farm.read.threshold.rate", 10, "Baseline SendAll reads per sec, additional reads are SendOne (SendVarReadFirstLinger strategy only)")
+		farmReadThresholdRate    = flag.Int("farm.read.threshold.rate", 100, "Baseline SendAll keys read per sec, additional keys are SendOne (SendVarReadFirstLinger strategy only)")
 		farmReadThresholdLatency = flag.Duration("farm.read.threshold.latency", 50*time.Millisecond, "If a SendOne read has not returned anything after this latency, it's promoted to SendAll (SendVarReadFirstLinger strategy only)")
 		farmRepairer             = flag.String("farm.repairer", "RateLimited", "Farm repairer: RateLimited, Nop")
-		farmMaxRepairRate        = flag.Int("farm.repair.maxrate", 10, "Max repairs per second (RateLimited repairer only)")
+		farmMaxRepairRate        = flag.Int("farm.repair.maxrate", 50, "Max repairs per second (RateLimited repairer only)")
 		farmMaxRepairBacklog     = flag.Int("farm.repair.maxbacklog", 100000, "Max number of queued repairs (RateLimited repairer only)")
 		farmWalkerRate           = flag.Int("farm.walker.rate", 50, "Max keys read per second for data walking. Reduced by the current rate of incoming keys to be read. Set to 0 to disable data walking.")
 		maxSize                  = flag.Int("max.size", 10000, "Maximum number of events per key")
@@ -68,6 +74,12 @@ func main() {
 		}
 	}
 
+	// Pick rate police.
+	var rp ratepolice.RatePolice // nil will result in a no-op rate police.
+	if *farmWalkerRate > 0 || (*farmReadStrategy == "sendvarreadfirstlinger" && *farmReadThresholdRate > 0) {
+		rp = ratepolice.New(ratePoliceMovingAverageDuration, ratePoliceNumberOfBuckets)
+	}
+
 	// Parse read strategy.
 	var readStrategy farm.ReadStrategy
 	switch strings.ToLower(*farmReadStrategy) {
@@ -78,7 +90,7 @@ func main() {
 	case "sendallreadfirstlinger":
 		readStrategy = farm.SendAllReadFirstLinger
 	case "sendvarreadfirstlinger":
-		readStrategy = farm.SendVarReadFirstLinger(*farmReadThresholdRate, *farmReadThresholdLatency)
+		readStrategy = farm.SendVarReadFirstLinger(*farmReadThresholdRate, *farmReadThresholdLatency, rp)
 	default:
 		log.Fatalf("unknown read strategy '%s'", *farmReadStrategy)
 	}
@@ -118,6 +130,7 @@ func main() {
 		readStrategy,
 		repairer,
 		*farmWalkerRate,
+		rp,
 		*maxSize,
 		*statsdSampleRate,
 		*statsdBucketPrefix,
@@ -152,6 +165,7 @@ func newFarm(
 	readStrategy farm.ReadStrategy,
 	repairer farm.Repairer,
 	walkerRate int,
+	rp ratepolice.RatePolice,
 	maxSize int,
 	statsdSampleRate float64,
 	bucketPrefix string,
@@ -195,6 +209,7 @@ func newFarm(
 		readStrategy,
 		repairer,
 		walkerRate,
+		rp,
 		instr,
 	), nil
 }
