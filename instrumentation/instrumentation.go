@@ -11,6 +11,7 @@ type Instrumentation interface {
 	InsertInstrumentation
 	SelectInstrumentation
 	DeleteInstrumentation
+	KeysInstrumentation
 	RepairInstrumentation
 }
 
@@ -41,6 +42,14 @@ type DeleteInstrumentation interface {
 	DeleteCallDuration(time.Duration)   // time spent per call
 	DeleteRecordDuration(time.Duration) // time spent per record (average)
 	DeleteQuorumFailure()               // called if the Delete failed due to lack of quorum
+}
+
+// KeysInstrumentation describes metrics for the Keys path.
+type KeysInstrumentation interface {
+	KeysFailure()           // called when an instance runs into an error and is therefore skipped
+	KeysInstanceCompleted() // called when done scanning the keys of one instance (with or without errors)
+	KeysClusterCompleted()  // called when done scanning the keys of a whole cluster (with or without errors)
+	KeysFarmCompleted()     // called when done scanning the keys of a whole farm (with or without errors)
 }
 
 // RepairInstrumentation describes metrics for Repairs.
@@ -117,6 +126,18 @@ func (i NopInstrumentation) DeleteRecordDuration(time.Duration) {}
 
 // DeleteQuorumFailure satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) DeleteQuorumFailure() {}
+
+// KeysFailure satisfies the Instrumentation interface but does no work.
+func (i NopInstrumentation) KeysFailure() {}
+
+// KeysInstanceCompleted satisfies the Instrumentation interface but does no work.
+func (i NopInstrumentation) KeysInstanceCompleted() {}
+
+// KeysClusterCompleted satisfies the Instrumentation interface but does no work.
+func (i NopInstrumentation) KeysClusterCompleted() {}
+
+// KeysFarmCompleted satisfies the Instrumentation interface but does no work.
+func (i NopInstrumentation) KeysFarmCompleted() {}
 
 // RepairCall satisfies the Instrumnetation interface but does no work.
 func (i NopInstrumentation) RepairCall() {}

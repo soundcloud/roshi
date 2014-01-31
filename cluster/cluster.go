@@ -297,13 +297,17 @@ func (c *cluster) Keys() chan string {
 					return nil
 				}); err != nil {
 					log.Printf("cluster: during Keys on instance %d: %s", index, err)
+					c.instrumentation.KeysFailure()
 					break // Skip failed instance.
 				}
 				if cursor == 0 {
-					break
+					break // Back at cursor 0, this instance is done.
 				}
 			}
+			c.instrumentation.KeysInstanceCompleted()
+
 		}
+		c.instrumentation.KeysClusterCompleted()
 	}()
 	return ch
 }

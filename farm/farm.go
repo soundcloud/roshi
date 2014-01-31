@@ -122,14 +122,13 @@ func (f *Farm) startWalker(walkerRate int) {
 	go func() {
 		for {
 			anythingSent := false
-			// TODO: Add instrumentation to count completed nodes,
-			// completed clusters, and completed cycles.
 			for _, i := range rand.Perm(len(f.clusters)) {
 				for key := range f.clusters[i].Keys() {
 					keyChannel <- key
 					anythingSent = true
 				}
 			}
+			f.instrumentation.KeysFarmCompleted()
 			if !anythingSent {
 				// Don't spin too quickly in case of an
 				// empty cluster.
