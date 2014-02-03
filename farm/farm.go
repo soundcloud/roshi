@@ -13,6 +13,12 @@ import (
 	"github.com/soundcloud/roshi/instrumentation"
 )
 
+const (
+	// MaxInt is what you think it is. Unfortunately not provided
+	// by the go math package.
+	MaxInt = int(^uint(0) >> 1)
+)
+
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
@@ -23,6 +29,7 @@ type Farm struct {
 	writeQuorum     int
 	readStrategy    coreReadStrategy
 	repairer        coreRepairer
+	ratePolice      RatePolice
 	instrumentation instrumentation.Instrumentation
 }
 
@@ -33,15 +40,20 @@ type Farm struct {
 // receives an overall success. Reads are sent to clusters according to the
 // passed ReadStrategy.
 //
-// Clusters, writeQuorum, and readStrategy are required. Repairer and
-// instrumentation may be nil.
+// Clusters, writeQuorum, and readStrategy are required. Repairer, rp and
+// instr may be nil.
 func New(
 	clusters []cluster.Cluster,
 	writeQuorum int,
 	readStrategy ReadStrategy,
 	repairer Repairer,
+	walkerRate int,
+	rp RatePolice,
 	instr instrumentation.Instrumentation,
 ) *Farm {
+	if rp == nil {
+		rp = NewNoPolice()
+	}
 	if instr == nil {
 		instr = instrumentation.NopInstrumentation{}
 	}
@@ -51,10 +63,12 @@ func New(
 	farm := &Farm{
 		clusters:        clusters,
 		writeQuorum:     writeQuorum,
+		ratePolice:      rp,
 		instrumentation: instr,
 	}
 	farm.readStrategy = readStrategy(farm)
 	farm.repairer = repairer(farm)
+	go farm.startWalker(walkerRate)
 	return farm
 }
 
@@ -80,6 +94,7 @@ func (f *Farm) Select(keys []string, offset, limit int) (map[string][]common.Key
 	if len(keys) <= 0 {
 		return map[string][]common.KeyScoreMember{}, nil
 	}
+	f.ratePolice.Report(len(keys))
 	return f.readStrategy(keys, offset, limit)
 }
 
@@ -91,6 +106,53 @@ func (f *Farm) Delete(tuples []common.KeyScoreMember) error {
 		func(c cluster.Cluster, a []common.KeyScoreMember) error { return c.Delete(a) },
 		deleteInstrumentation{f.instrumentation},
 	)
+}
+
+func (f *Farm) startWalker(walkerRate int) {
+	if walkerRate == 0 {
+		return
+	}
+	keyChannel := make(chan string)
+
+	// Start a goroutine that endlessly iterates through all
+	// clusters in random order. (It will visit each cluster
+	// exactly once before starting over.) The keys of each
+	// cluster are sent one after another to the keyChannel.
+	go func() {
+		for {
+			anythingSent := false
+			for _, i := range rand.Perm(len(f.clusters)) {
+				for key := range f.clusters[i].Keys() {
+					keyChannel <- key
+					anythingSent = true
+				}
+			}
+			f.instrumentation.KeysFarmCompleted()
+			if !anythingSent {
+				// Don't spin too quickly in case of an
+				// empty cluster.
+				time.Sleep(time.Second)
+			}
+		}
+	}()
+
+	for {
+		batchSize := f.ratePolice.Request(walkerRate)
+		if batchSize <= 0 {
+			// Too much traffic. Wait for a sec and try again.
+			f.instrumentation.KeysThrottled()
+			time.Sleep(time.Second)
+			continue
+		}
+		keys := []string{}
+		for ; batchSize > 0; batchSize-- {
+			keys = append(keys, <-keyChannel)
+		}
+		go f.Select(keys, 0, MaxInt)
+		// We are only interested in triggering the
+		// read repair, so we throw away the results
+		// and don't check for errors.
+	}
 }
 
 func (f *Farm) write(

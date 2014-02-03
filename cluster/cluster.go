@@ -4,14 +4,21 @@ package cluster
 
 import (
 	"fmt"
+	"log"
+	"math/rand"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/instrumentation"
 	"github.com/soundcloud/roshi/shard"
 	"github.com/soundcloud/roshi/vendor/redigo/redis"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 // Cluster defines methods that efficiently provide ZSET semantics on a
 // cluster.
@@ -20,6 +27,7 @@ type Cluster interface {
 	Selecter
 	Deleter
 	Scorer
+	Scanner
 }
 
 // Inserter defines the method to add elements to a sorted set. A key-member's
@@ -48,6 +56,18 @@ type Deleter interface {
 // (true = inserted).
 type Scorer interface {
 	Score(key, member string) (float64, bool, error)
+}
+
+// Scanner emits all keys in the keyspace over a returned
+// channel. When the keys are exhaused, the channel is closed. The
+// order in which keys are emitted is unpredictable. Scanning is
+// performed one Redis instance at a time in random order of the
+// instances. If an instance is down at the time it is tried to be
+// scanned, it is skipped (no retries). See also implications of the
+// Redis SCAN command. Note that keys for which only deletes have
+// happened (and no inserts) will not be emitted.
+type Scanner interface {
+	Keys() chan string
 }
 
 const (
@@ -154,7 +174,7 @@ func (c *cluster) Insert(tuples []common.KeyScoreMember) error {
 	return nil
 }
 
-// Select effeciently performs ZREVRANGEs for each of the passed keys using
+// Select efficiently performs ZREVRANGEs for each of the passed keys using
 // the offset and limit for each. It pushes results to the returned chan as
 // they become available.
 func (c *cluster) Select(keys []string, offset, limit int) <-chan Element {
@@ -214,7 +234,6 @@ func (c *cluster) Delete(tuples []common.KeyScoreMember) error {
 	errChan := make(chan error, len(m))
 	for index, tuples := range m {
 		go func(index int, tuples []common.KeyScoreMember) {
-
 			errChan <- c.shards.WithIndex(index, func(conn redis.Conn) error {
 				return pipelineDelete(conn, tuples, c.maxSize)
 			})
@@ -243,6 +262,54 @@ func (c *cluster) Score(key, member string) (float64, bool, error) {
 		return err
 	})
 	return score, inserted, err
+}
+
+// Keys implements the Scanner interface.
+func (c *cluster) Keys() chan string {
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		for _, index := range rand.Perm(c.shards.Size()) {
+			cursor := 0
+			for {
+				if err := c.shards.WithIndex(index, func(conn redis.Conn) error {
+					values, err := redis.Values(conn.Do("SCAN", cursor))
+					if err != nil {
+						return err
+					}
+					if n := len(values); n != 2 {
+						return fmt.Errorf("received %d values from Redis, expected exactly 2", n)
+					}
+					if cursor, err = redis.Int(values[0], nil); err != nil {
+						return err
+					}
+					keys, err := redis.Strings(values[1], nil)
+					if err != nil {
+						return err
+					}
+					for _, key := range keys {
+						// Only emit keys with insertSuffix - but strip the suffix.
+						l := len(key) - len(insertSuffix)
+						if key[l:] == insertSuffix {
+							ch <- key[:l]
+						}
+					}
+					return nil
+				}); err != nil {
+					log.Printf("cluster: during Keys on instance %d: %s", index, err)
+					c.instrumentation.KeysFailure()
+					break // Skip failed instance.
+				}
+				if cursor == 0 {
+					break // Back at cursor 0, this instance is done.
+				}
+			}
+			c.instrumentation.KeysInstanceCompleted()
+
+		}
+		c.instrumentation.KeysClusterCompleted()
+	}()
+	return ch
 }
 
 func pipelineInsert(conn redis.Conn, tuples []common.KeyScoreMember, maxSize int) error {

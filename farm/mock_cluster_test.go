@@ -76,6 +76,7 @@ type mockCluster struct {
 	countSelect       int32
 	countDelete       int32
 	countScore        int32
+	countKeys         int32
 	countOpenChannels int32
 }
 
@@ -176,6 +177,24 @@ func (c *mockCluster) Score(key, member string) (float64, bool, error) {
 		}
 	}
 	return 0, false, fmt.Errorf("no member '%s' found for key '%s'", member, key)
+}
+
+func (c *mockCluster) Keys() chan string {
+	atomic.AddInt32(&c.countKeys, 1)
+	ch := make(chan string)
+	m := map[string]common.KeyScoreMembers{}
+	// Copy c.m so that at least after this method has returned,
+	// we don't run into issues with concurrent modifications.
+	for k, v := range c.m {
+		m[k] = v
+	}
+	go func() {
+		defer close(ch)
+		for key := range m {
+			ch <- key
+		}
+	}()
+	return ch
 }
 
 func newMockClusters(n int) []cluster.Cluster {

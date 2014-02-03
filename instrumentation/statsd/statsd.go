@@ -93,6 +93,26 @@ func (i statsdInstrumentation) DeleteQuorumFailure() {
 	i.statter.Counter(i.sampleRate, i.prefix+"delete.quorum_failure.count", 1)
 }
 
+func (i statsdInstrumentation) KeysFailure() {
+	i.statter.Counter(i.sampleRate, i.prefix+"keys.failure.count", 1)
+}
+
+func (i statsdInstrumentation) KeysInstanceCompleted() {
+	i.statter.Counter(i.sampleRate, i.prefix+"keys.instance_completed.count", 1)
+}
+
+func (i statsdInstrumentation) KeysClusterCompleted() {
+	i.statter.Counter(i.sampleRate, i.prefix+"keys.cluster_completed.count", 1)
+}
+
+func (i statsdInstrumentation) KeysFarmCompleted() {
+	i.statter.Counter(i.sampleRate, i.prefix+"keys.farm_completed.count", 1)
+}
+
+func (i statsdInstrumentation) KeysThrottled() {
+	i.statter.Counter(i.sampleRate, i.prefix+"keys.throttled.count", 1)
+}
+
 func (i statsdInstrumentation) RepairCall() {
 	i.statter.Counter(i.sampleRate, i.prefix+"repair.call.count", 1)
 }

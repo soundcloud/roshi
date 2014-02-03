@@ -130,43 +130,39 @@ func SendAllReadAll(farm *Farm) coreReadStrategy {
 // collected, SendAllReadFirstLinger will determine which keys should be sent
 // to the repairer.
 func SendAllReadFirstLinger(farm *Farm) coreReadStrategy {
-	return SendVarReadFirstLinger(-1, -1)(farm)
+	return SendVarReadFirstLinger(-1, -1, nil)(farm)
 }
 
-// SendVarReadFirstLinger is a refined version of SendAllReadFirstLinger. It
-// works in the same way but reduces the requests to all clusters under
-// certain circumstances.
+// SendVarReadFirstLinger is a refined version of
+// SendAllReadFirstLinger. It works in the same way but reduces the
+// requests to all clusters under certain circumstances.  If you pass
+// in a RatePolice, it will request permission from it with
+// thresholdKeysReadPerSec as targe rate. Obviously, you should use
+// the same RatePolice as the one the farm is reporting its reads
+// to. If the RatePolice determines that the target rate is already
+// reached, this read strategy will not perform a "SendAll" style read
+// but a "SendOne" style.  "SendOne" has two issues, though: First, no
+// repairs will ever result from a "SendOne" read. Second, if the one
+// cluster the read request is sent to is unable (or slow) to reply,
+// the whole read will fail (or be delayed). The first issue is
+// implicitly solved by SendVarReadFirstLinger because the baseline
+// amount of "SendAll" reads effectively provides a probabilistic
+// repair scheme. To solve the second issue, SendVarReadFirstLinger
+// promotes any "SendOne" read to a "SendAll" read if it was
+// unsuccessful to return any results within a time set by
+// thresholdLatency.
 //
-// As long as the number of reads per second are below thresholdReadsPerSec,
-// everything stays the same. However, SendVarReadFirstLinger never launches
-// more "SendAll" style reads per second as set by thresholdReadsPerSec. If
-// more reads are required, the surplus is executed in "SendOne" style.
-// "SendOne" has two issues, though: First, no repairs will ever result from a
-// "SendOne" read. Second, if the one cluster the read request is sent to is
-// unable (or slow) to reply, the whole read will fail (or be delayed). The
-// first issue is implicitly solved by SendVarReadFirstLinger because the
-// baseline amount of "SendAll" reads effectively provides a probabilistic
-// repair scheme. To solve the second issue, SendVarReadFirstLinger promotes
-// any "SendOne" read to a "SendAll" read if it was unsuccessful to return any
-// results within a time set by thresholdLatency.
-//
-// For unlimited thresholdReadsPerSec, set it to a negative number. To never
+// To never do an initial "SendAll", set thresholdKeysReadPerSec to 0
+// (in which case only the promotion to "SendAll" after
+// thresholdLatency has passed will ever create "SendAll" reads - and
+// only those can trigger repairs!).  For unlimited
+// thresholdKeysReadPerSec, set it to a negative number. To never
 // promote "SendOne" to "SendAll", set thresholdLatency to a negative
 // duration.
-func SendVarReadFirstLinger(thresholdReadsPerSec int, thresholdLatency time.Duration) func(*Farm) coreReadStrategy {
-	permitSendAll := make(chan bool)
-	var minWaitAfterSendAll time.Duration
-	if thresholdReadsPerSec > 0 {
-		minWaitAfterSendAll = time.Second / time.Duration(thresholdReadsPerSec)
-		go func() {
-			// Handing out "SendAll permits" at a limited rate.
-			for {
-				permitSendAll <- true
-				time.Sleep(minWaitAfterSendAll)
-			}
-		}()
+func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.Duration, rp RatePolice) func(*Farm) coreReadStrategy {
+	if rp == nil || thresholdKeysReadPerSec <= 0 {
+		rp = NewNoPolice()
 	}
-
 	return func(farm *Farm) coreReadStrategy {
 		return func(keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error) {
 			began := time.Now()
@@ -174,16 +170,19 @@ func SendVarReadFirstLinger(thresholdReadsPerSec int, thresholdLatency time.Dura
 
 			var maySendAll bool
 			switch {
-			case thresholdReadsPerSec > 0:
-				select {
-				case <-permitSendAll:
+			case thresholdKeysReadPerSec > 0:
+				// Our key reads are already reported
+				// to the rate police at this point,
+				// so a permitted number of 0 or more
+				// is OK.
+				if rp.Request(thresholdKeysReadPerSec) >= 0 {
 					maySendAll = true
-				default:
+				} else {
 					maySendAll = false
 				}
-			case thresholdReadsPerSec == 0:
+			case thresholdKeysReadPerSec == 0:
 				maySendAll = false
-			case thresholdReadsPerSec < 0:
+			case thresholdKeysReadPerSec < 0:
 				maySendAll = true
 			}
 
