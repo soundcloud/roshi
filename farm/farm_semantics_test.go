@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/soundcloud/roshi/common"
-	"github.com/soundcloud/roshi/ratepolice"
 )
 
 func TestInsertSelect(t *testing.T) {
@@ -124,7 +123,7 @@ func TestWalkerReadRepair(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	rp := ratepolice.New(time.Second, 10)
+	rp := NewRatePolice(time.Second, 10)
 	_ = New(clusters, len(clusters), SendAllReadAll, RateLimitedRepairer(10, 0), 10, rp, nil)
 	time.Sleep(3 * time.Second)
 

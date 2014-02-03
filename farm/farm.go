@@ -11,7 +11,6 @@ import (
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/instrumentation"
-	"github.com/soundcloud/roshi/ratepolice"
 )
 
 const (
@@ -30,7 +29,7 @@ type Farm struct {
 	writeQuorum     int
 	readStrategy    coreReadStrategy
 	repairer        coreRepairer
-	ratePolice      ratepolice.RatePolice
+	ratePolice      RatePolice
 	instrumentation instrumentation.Instrumentation
 }
 
@@ -49,11 +48,11 @@ func New(
 	readStrategy ReadStrategy,
 	repairer Repairer,
 	walkerRate int,
-	rp ratepolice.RatePolice,
+	rp RatePolice,
 	instr instrumentation.Instrumentation,
 ) *Farm {
 	if rp == nil {
-		rp = ratepolice.NewNop()
+		rp = NewNoPolice()
 	}
 	if instr == nil {
 		instr = instrumentation.NopInstrumentation{}

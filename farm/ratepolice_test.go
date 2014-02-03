@@ -1,4 +1,4 @@
-package ratepolice
+package farm
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 )
 
 func TestNoPolice(t *testing.T) {
-	rp := NewNop()
+	rp := NewNoPolice()
 	rp.Report(123456789)
 	if expected, got := MaxInt, rp.Request(-1); expected != got {
 		t.Errorf("Expected %v, got %v.", expected, got)
@@ -14,7 +14,7 @@ func TestNoPolice(t *testing.T) {
 }
 
 func TestRatePolice(t *testing.T) {
-	rp := New(100*time.Millisecond, 10)
+	rp := NewRatePolice(100*time.Millisecond, 10)
 	if expected, got := 20, rp.Request(1000); expected != got {
 		t.Errorf("Expected %v, got %v.", expected, got)
 	}

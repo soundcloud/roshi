@@ -9,7 +9,6 @@ import (
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/instrumentation"
-	"github.com/soundcloud/roshi/ratepolice"
 )
 
 var (
@@ -234,7 +233,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 
 func TestSendVarReadFirstLinger(t *testing.T) {
 	clusters := newMockClusters(3)
-	rp := ratepolice.New(time.Second, 10)
+	rp := NewRatePolice(time.Second, 10)
 	farm := New(
 		clusters,
 		len(clusters),

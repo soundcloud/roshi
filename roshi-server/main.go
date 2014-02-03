@@ -22,7 +22,6 @@ import (
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/farm"
 	"github.com/soundcloud/roshi/instrumentation/statsd"
-	"github.com/soundcloud/roshi/ratepolice"
 	"github.com/soundcloud/roshi/shard"
 	"github.com/soundcloud/roshi/vendor/g2s"
 	"github.com/soundcloud/roshi/vendor/handy/breaker"
@@ -75,9 +74,9 @@ func main() {
 	}
 
 	// Pick rate police.
-	var rp ratepolice.RatePolice // nil will result in a no-op rate police.
+	var rp farm.RatePolice // nil will result in a no-op rate police.
 	if *farmWalkerRate > 0 || (*farmReadStrategy == "sendvarreadfirstlinger" && *farmReadThresholdRate > 0) {
-		rp = ratepolice.New(ratePoliceMovingAverageDuration, ratePoliceNumberOfBuckets)
+		rp = farm.NewRatePolice(ratePoliceMovingAverageDuration, ratePoliceNumberOfBuckets)
 	}
 
 	// Parse read strategy.
@@ -165,7 +164,7 @@ func newFarm(
 	readStrategy farm.ReadStrategy,
 	repairer farm.Repairer,
 	walkerRate int,
-	rp ratepolice.RatePolice,
+	rp farm.RatePolice,
 	maxSize int,
 	statsdSampleRate float64,
 	bucketPrefix string,

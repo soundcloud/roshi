@@ -9,7 +9,6 @@ import (
 
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
-	"github.com/soundcloud/roshi/ratepolice"
 )
 
 // ReadStrategy generates a ReadStrategy for a given Farm. Different core
@@ -160,9 +159,9 @@ func SendAllReadFirstLinger(farm *Farm) coreReadStrategy {
 // thresholdKeysReadPerSec, set it to a negative number. To never
 // promote "SendOne" to "SendAll", set thresholdLatency to a negative
 // duration.
-func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.Duration, rp ratepolice.RatePolice) func(*Farm) coreReadStrategy {
+func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.Duration, rp RatePolice) func(*Farm) coreReadStrategy {
 	if rp == nil || thresholdKeysReadPerSec <= 0 {
-		rp = ratepolice.NewNop()
+		rp = NewNoPolice()
 	}
 	return func(farm *Farm) coreReadStrategy {
 		return func(keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error) {

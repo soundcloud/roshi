@@ -1,16 +1,7 @@
-// Package ratepolice helps to track a rate as a moving average and
-// then inquire how many events can be added to not exceed a given
-// target rate.
-package ratepolice
+package farm
 
 import (
 	"time"
-)
-
-const (
-	// MaxInt is what you think it is. Unfortunately not provided
-	// by the go math package.
-	MaxInt = int(^uint(0) >> 1)
 )
 
 // Reporter is the interface to report events to the rate police.
@@ -44,29 +35,33 @@ type Requester interface {
 }
 
 // RatePolice combines the Reporter and Requester interfaces. Create
-// instances with New or NewNop.
+// instances with NewRatePolice or NewNoPolice.
+// The ratepolice helps to track a rate as a moving average and
+// then inquire how many events can be added to not exceed a given
+// target rate.
 type RatePolice interface {
 	Reporter
 	Requester
 }
 
-// New creates an implementation of RatePolice. The moving average is
-// calculated over a time window given by movingAverageWindow. The
-// calculation is done using time buckets (numberOfBuckets buckets,
-// each movingAverageWindow/numberOfBuckets long). The time window
-// should be approximately as long as the time over which events can
-// interact with each other at the expected target rate. (For example,
-// you run a web service where queries may have a latency of up to 5s
-// under load (let's say a timeout kicks in after 5s so that queries
-// will not run for longer than that). Your running average window
-// should be ~5s then, too, so that a spike of queries will continue
-// to be charged against the tracked rate for about as long as these
-// queries may linger and consume resources.) A higher number of
-// buckets increases the precision of the calculation, but requires
-// more computational work. ~10 buckets should usually be enough for
-// practical purposes. The actual value depends on your expected rates
-// in relation to the moving average window.
-func New(movingAverageWindow time.Duration, numberOfBuckets int) RatePolice {
+// NewRatePolice creates an implementation of RatePolice. The moving
+// average is calculated over a time window given by
+// movingAverageWindow. The calculation is done using time buckets
+// (numberOfBuckets buckets, each movingAverageWindow/numberOfBuckets
+// long). The time window should be approximately as long as the time
+// over which events can interact with each other at the expected
+// target rate. (For example, you run a web service where queries may
+// have a latency of up to 5s under load (let's say a timeout kicks in
+// after 5s so that queries will not run for longer than that). Your
+// running average window should be ~5s then, too, so that a spike of
+// queries will continue to be charged against the tracked rate for
+// about as long as these queries may linger and consume resources.) A
+// higher number of buckets increases the precision of the
+// calculation, but requires more computational work. ~10 buckets
+// should usually be enough for practical purposes. The actual value
+// depends on your expected rates in relation to the moving average
+// window.
+func NewRatePolice(movingAverageWindow time.Duration, numberOfBuckets int) RatePolice {
 	rp := &ratePolice{
 		buckets:  make([]int, numberOfBuckets),
 		reports:  make(chan int),
@@ -79,10 +74,10 @@ func New(movingAverageWindow time.Duration, numberOfBuckets int) RatePolice {
 	return rp
 }
 
-// NewNop creates a rate police implementation that allows everything,
+// NewNoPolice creates a rate police implementation that allows everything,
 // i.e. its Report call is a no-op, and the Request call will always
 // return MaxInt.
-func NewNop() RatePolice {
+func NewNoPolice() RatePolice {
 	return &noPolice{}
 }
 
