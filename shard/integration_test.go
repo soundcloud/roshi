@@ -1,6 +1,7 @@
 package shard_test
 
 import (
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -34,7 +35,11 @@ func TestRecovery(t *testing.T) {
 			t.Fatalf("Starting %s: %s", binary, err)
 		}
 		defer cmd.Process.Kill()
-		time.Sleep(10 * time.Millisecond)
+		waitDuration, err := time.ParseDuration(os.Getenv("TEST_REDIS_WAIT_DURATION"))
+		if err != nil {
+			waitDuration = 10 * time.Millisecond
+		}
+		time.Sleep(waitDuration)
 
 		// Try initial PING
 		if err := s.With("irrelevant", func(conn redis.Conn) error {
