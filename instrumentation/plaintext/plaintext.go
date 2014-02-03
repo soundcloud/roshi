@@ -102,6 +102,10 @@ func (i plaintextInstrumentation) KeysFarmCompleted() {
 	fmt.Fprintf(i, "keys.farm_completed.count 1")
 }
 
+func (i plaintextInstrumentation) KeysThrottled() {
+	fmt.Fprintf(i, "keys.throttled.count 1")
+}
+
 func (i plaintextInstrumentation) RepairCall() {
 	fmt.Fprintf(i, "repair.call.count 1")
 }

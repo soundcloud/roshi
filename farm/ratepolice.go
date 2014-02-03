@@ -63,14 +63,10 @@ type RatePolice interface {
 // window.
 func NewRatePolice(movingAverageWindow time.Duration, numberOfBuckets int) RatePolice {
 	rp := &ratePolice{
-		buckets:  make([]int, numberOfBuckets),
 		reports:  make(chan int),
 		requests: make(chan request),
 	}
-	rp.currentBucketStartTime = time.Now()
-	rp.movingAverageWindow = movingAverageWindow
-	rp.bucketDuration = movingAverageWindow / time.Duration(numberOfBuckets)
-	go rp.loop()
+	go rp.loop(movingAverageWindow, numberOfBuckets)
 	return rp
 }
 
@@ -82,14 +78,8 @@ func NewNoPolice() RatePolice {
 }
 
 type ratePolice struct {
-	buckets                []int
-	reports                chan int
-	requests               chan request
-	currentBucket          int
-	currentBucketStartTime time.Time
-	movingAverageWindow    time.Duration
-	bucketDuration         time.Duration
-	bucketSum              int
+	reports  chan int
+	requests chan request
 }
 
 type request struct {
@@ -107,46 +97,52 @@ func (rp *ratePolice) Request(targetRatePerSec int) int {
 	return <-result
 }
 
-func (rp *ratePolice) loop() {
+func (rp *ratePolice) loop(movingAverageWindow time.Duration, numberOfBuckets int) {
+	buckets := make([]int, numberOfBuckets)
+	bucketSum := 0
+	currentBucket := 0
+	currentBucketStartTime := time.Now()
+	bucketDuration := movingAverageWindow / time.Duration(numberOfBuckets)
+
+	updateBuckets := func() {
+		now := time.Now()
+		bucketShift := int(now.Sub(currentBucketStartTime) / bucketDuration)
+		if bucketShift <= 0 {
+			return
+		}
+		currentBucketStartTime = now
+		if bucketShift >= numberOfBuckets {
+			// Shortcut. Just empty all buckets in this case.
+			bucketSum = 0
+			buckets = make([]int, numberOfBuckets) // Actually faster than zero'ing in a loop.
+			return
+		}
+		for ; bucketShift > 0; bucketShift-- {
+			currentBucket++
+			if currentBucket >= numberOfBuckets {
+				currentBucket = 0
+			}
+			bucketSum -= buckets[currentBucket]
+			buckets[currentBucket] = 0
+		}
+	}
+
 	for {
 		select {
 		case reported := <-rp.reports:
-			rp.updateBuckets()
-			rp.buckets[rp.currentBucket] += reported
-			rp.bucketSum += reported
+			updateBuckets()
+			buckets[currentBucket] += reported
+			bucketSum += reported
 		case requested := <-rp.requests:
-			rp.updateBuckets()
-			max := int(time.Duration(requested.targetRatePerSec) * rp.movingAverageWindow / time.Second)
-			granted := max - rp.bucketSum
-			cap := 2 * max / len(rp.buckets)
+			updateBuckets()
+			max := int(time.Duration(requested.targetRatePerSec) * movingAverageWindow / time.Second)
+			granted := max - bucketSum
+			cap := 2 * max / numberOfBuckets
 			if granted > cap {
 				granted = cap
 			}
 			requested.result <- granted
 		}
-	}
-}
-
-func (rp *ratePolice) updateBuckets() {
-	now := time.Now()
-	bucketShift := int(now.Sub(rp.currentBucketStartTime) / rp.bucketDuration)
-	if bucketShift <= 0 {
-		return
-	}
-	rp.currentBucketStartTime = now
-	if bucketShift >= len(rp.buckets) {
-		// Shortcut. Just empty all buckets in this case.
-		rp.bucketSum = 0
-		rp.buckets = make([]int, len(rp.buckets)) // Actually faster than zero'ing in a loop.
-		return
-	}
-	for ; bucketShift > 0; bucketShift-- {
-		rp.currentBucket++
-		if rp.currentBucket >= len(rp.buckets) {
-			rp.currentBucket = 0
-		}
-		rp.bucketSum -= rp.buckets[rp.currentBucket]
-		rp.buckets[rp.currentBucket] = 0
 	}
 }
 

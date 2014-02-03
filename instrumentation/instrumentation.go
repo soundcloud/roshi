@@ -50,6 +50,7 @@ type KeysInstrumentation interface {
 	KeysInstanceCompleted() // called when done scanning the keys of one instance (with or without errors)
 	KeysClusterCompleted()  // called when done scanning the keys of a whole cluster (with or without errors)
 	KeysFarmCompleted()     // called when done scanning the keys of a whole farm (with or without errors)
+	KeysThrottled()         // called when key scanning is stopped (for 1s) to not interfere with actual queries
 }
 
 // RepairInstrumentation describes metrics for Repairs.
@@ -138,6 +139,9 @@ func (i NopInstrumentation) KeysClusterCompleted() {}
 
 // KeysFarmCompleted satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) KeysFarmCompleted() {}
+
+// KeysFarmCompleted satisfies the Instrumentation interface but does no work.
+func (i NopInstrumentation) KeysThrottled() {}
 
 // RepairCall satisfies the Instrumnetation interface but does no work.
 func (i NopInstrumentation) RepairCall() {}

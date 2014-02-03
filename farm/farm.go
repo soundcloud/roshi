@@ -140,6 +140,7 @@ func (f *Farm) startWalker(walkerRate int) {
 		batchSize := f.ratePolice.Request(walkerRate)
 		if batchSize <= 0 {
 			// Too much traffic. Wait for a sec and try again.
+			f.instrumentation.KeysThrottled()
 			time.Sleep(time.Second)
 			continue
 		}
