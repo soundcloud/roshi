@@ -178,6 +178,11 @@ func (c *cluster) Insert(tuples []common.KeyScoreMember) error {
 // the offset and limit for each. It pushes results to the returned chan as
 // they become available.
 func (c *cluster) Select(keys []string, offset, limit int) <-chan Element {
+	// In the walker, we pass limit=MaxInt to specify "all possible members"
+	if limit > c.maxSize {
+		limit = c.maxSize
+	}
+
 	out := make(chan Element)
 	go func() {
 		// Bucketize
