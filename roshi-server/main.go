@@ -21,7 +21,7 @@ import (
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/farm"
-	"github.com/soundcloud/roshi/instrumentation/plaintext"
+	"github.com/soundcloud/roshi/instrumentation/statsd"
 	"github.com/soundcloud/roshi/shard"
 	"github.com/soundcloud/roshi/vendor/g2s"
 	"github.com/soundcloud/roshi/vendor/handy/breaker"
@@ -129,6 +129,7 @@ func main() {
 			// TODO: Implement a graceful shutdown once
 			// there is a clean way to do so with the http
 			// server.
+			log.Print("Walk complete. Exiting...")
 			os.Exit(0)
 		}()
 	}
@@ -186,8 +187,7 @@ func newFarm(
 	bucketPrefix string,
 ) (*farm.Farm, error) {
 	// Build instrumentation.
-	//instr := statsd.New(stats, float32(statsdSampleRate), bucketPrefix)
-	instr := plaintext.New(os.Stdout)
+	instr := statsd.New(stats, float32(statsdSampleRate), bucketPrefix)
 
 	// Parse out and build clusters.
 	clusters := []cluster.Cluster{}
