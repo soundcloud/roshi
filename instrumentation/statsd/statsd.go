@@ -49,6 +49,10 @@ func (i statsdInstrumentation) SelectCall() {
 	i.statter.Counter(i.sampleRate, i.prefix+"select.call.count", 1)
 }
 
+func (i statsdInstrumentation) SelectKeys(n int) {
+	i.statter.Counter(i.sampleRate, i.prefix+"select.keys.count", n)
+}
+
 func (i statsdInstrumentation) SelectFirstResponseDuration(d time.Duration) {
 	i.statter.Timing(i.sampleRate, i.prefix+"select.first_response.duration", d)
 }
@@ -71,6 +75,14 @@ func (i statsdInstrumentation) SelectDuration(d time.Duration) {
 
 func (i statsdInstrumentation) SelectSendAllPromotion() {
 	i.statter.Counter(i.sampleRate, i.prefix+"select.send_all_promotion.count", 1)
+}
+
+func (i statsdInstrumentation) SelectRetrieved(n int) {
+	i.statter.Counter(i.sampleRate, i.prefix+"select.retrieved.count", n)
+}
+
+func (i statsdInstrumentation) SelectReturned(n int) {
+	i.statter.Counter(i.sampleRate, i.prefix+"select.returned.count", n)
 }
 
 func (i statsdInstrumentation) DeleteCall() {

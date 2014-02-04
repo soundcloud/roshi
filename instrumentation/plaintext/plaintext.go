@@ -42,6 +42,10 @@ func (i plaintextInstrumentation) SelectCall() {
 	fmt.Fprintf(i, "select.call.count 1")
 }
 
+func (i plaintextInstrumentation) SelectKeys(n int) {
+	fmt.Fprintf(i, "select.call.count %d", n)
+}
+
 func (i plaintextInstrumentation) SelectFirstResponseDuration(d time.Duration) {
 	fmt.Fprintf(i, "select.first_response.duration_ms %d", d.Nanoseconds()/1e6)
 }
@@ -64,6 +68,13 @@ func (i plaintextInstrumentation) SelectDuration(d time.Duration) {
 
 func (i plaintextInstrumentation) SelectSendAllPromotion() {
 	fmt.Fprintf(i, "select.send_all_promotion.count 1")
+}
+
+func (i plaintextInstrumentation) SelectRetrieved(n int) {
+	fmt.Fprintf(i, "select.retrieved.count %d", n)
+}
+func (i plaintextInstrumentation) SelectReturned(n int) {
+	fmt.Fprintf(i, "select.returned.count %d", n)
 }
 
 func (i plaintextInstrumentation) DeleteCall() {
