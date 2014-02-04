@@ -140,7 +140,7 @@ func (i NopInstrumentation) KeysClusterCompleted() {}
 // KeysFarmCompleted satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) KeysFarmCompleted() {}
 
-// KeysFarmCompleted satisfies the Instrumentation interface but does no work.
+// KeysThrottled satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) KeysThrottled() {}
 
 // RepairCall satisfies the Instrumnetation interface but does no work.

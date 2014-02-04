@@ -61,7 +61,7 @@ func (r *mockCoreRepairer) close() {}
 
 func TestSendOneReadOne(t *testing.T) {
 	clusters := newMockClusters(3)
-	farm := New(clusters, len(clusters), SendOneReadOne, MockRepairer, 0, nil, instrumentation.NopInstrumentation{})
+	farm := New(clusters, len(clusters), SendOneReadOne, MockRepairer, 0, nil, nil, nil)
 	farm.Insert([]common.KeyScoreMember{ksm})
 
 	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
@@ -81,7 +81,7 @@ func TestSendOneReadOne(t *testing.T) {
 
 func TestSendAllReadAll(t *testing.T) {
 	clusters := newMockClusters(3)
-	farm := New(clusters, len(clusters), SendAllReadAll, MockRepairer, 0, nil, instrumentation.NopInstrumentation{})
+	farm := New(clusters, len(clusters), SendAllReadAll, MockRepairer, 0, nil, nil, nil)
 	farm.Insert([]common.KeyScoreMember{ksm})
 
 	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
@@ -147,7 +147,7 @@ func TestSendAllReadAll(t *testing.T) {
 
 func TestSendAllReadFirstLinger(t *testing.T) {
 	clusters := newMockClusters(3)
-	farm := New(clusters, len(clusters), SendAllReadFirstLinger, MockRepairer, 0, nil, instrumentation.NopInstrumentation{})
+	farm := New(clusters, len(clusters), SendAllReadFirstLinger, MockRepairer, 0, nil, nil, nil)
 	farm.Insert([]common.KeyScoreMember{ksm})
 
 	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
@@ -240,8 +240,9 @@ func TestSendVarReadFirstLinger(t *testing.T) {
 		SendVarReadFirstLinger(2, time.Millisecond, rp),
 		MockRepairer,
 		0,
+		nil,
 		rp,
-		instrumentation.NopInstrumentation{},
+		nil,
 	)
 	farm.Insert([]common.KeyScoreMember{ksm})
 

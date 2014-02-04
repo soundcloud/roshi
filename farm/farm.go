@@ -29,6 +29,7 @@ type Farm struct {
 	writeQuorum     int
 	readStrategy    coreReadStrategy
 	repairer        coreRepairer
+	walkCompleted   chan bool
 	ratePolice      RatePolice
 	instrumentation instrumentation.Instrumentation
 }
@@ -40,14 +41,29 @@ type Farm struct {
 // receives an overall success. Reads are sent to clusters according to the
 // passed ReadStrategy.
 //
-// Clusters, writeQuorum, and readStrategy are required. Repairer, rp and
-// instr may be nil.
+// The repairer handles read-repairs (may be nil for no repairs).
+//
+// The walkerRate defines the max number of keys the data walker reads
+// per second. If 0, no data walk will happen.
+//
+// When the data walker finishes a walk of the whole farm, it will
+// send true to the walkCompleted channel (but only if it is ready to
+// receive at that moment). (Use nil if you don't want to receive
+// anything.)
+//
+// The RatePolice is used to limit the walk rate so that the sum of
+// keys read by the walker and keys read by actual queries does not
+// exceed the walkerRate. (rp can be nil, in which case no limits will
+// be imposed. Only do that with a walkerRate of 0.)
+//
+// Set instr to nil if you don't need instrumentation.
 func New(
 	clusters []cluster.Cluster,
 	writeQuorum int,
 	readStrategy ReadStrategy,
 	repairer Repairer,
 	walkerRate int,
+	walkCompleted chan bool,
 	rp RatePolice,
 	instr instrumentation.Instrumentation,
 ) *Farm {
@@ -63,6 +79,7 @@ func New(
 	farm := &Farm{
 		clusters:        clusters,
 		writeQuorum:     writeQuorum,
+		walkCompleted:   walkCompleted,
 		ratePolice:      rp,
 		instrumentation: instr,
 	}
@@ -113,6 +130,7 @@ func (f *Farm) startWalker(walkerRate int) {
 		return
 	}
 	keyChannel := make(chan string)
+	walkCompleted := make(chan bool, 1)
 
 	// Start a goroutine that endlessly iterates through all
 	// clusters in random order. (It will visit each cluster
@@ -128,6 +146,11 @@ func (f *Farm) startWalker(walkerRate int) {
 				}
 			}
 			f.instrumentation.KeysFarmCompleted()
+			// Report completed if not already done so.
+			select {
+			case walkCompleted <- true:
+			default:
+			}
 			if !anythingSent {
 				// Don't spin too quickly in case of an
 				// empty cluster.
@@ -144,14 +167,31 @@ func (f *Farm) startWalker(walkerRate int) {
 			time.Sleep(time.Second)
 			continue
 		}
+		// Safeguard against excessive batchSize.
+		if batchSize > 10*walkerRate {
+			batchSize = 10 * walkerRate
+		}
 		keys := []string{}
 		for ; batchSize > 0; batchSize-- {
 			keys = append(keys, <-keyChannel)
 		}
-		go f.Select(keys, 0, MaxInt)
 		// We are only interested in triggering the
 		// read repair, so we throw away the results
 		// and don't check for errors.
+		f.Select(keys, 0, MaxInt)
+		// Report completion if we were asked to do so _and_ a
+		// walk was actually reported _and_ the report channel
+		// is ready to receive.
+		if f.walkCompleted != nil {
+			select {
+			case <-walkCompleted:
+				select {
+				case f.walkCompleted <- true:
+				default:
+				}
+			default:
+			}
+		}
 	}
 }
 
