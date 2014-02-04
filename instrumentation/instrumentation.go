@@ -27,12 +27,15 @@ type InsertInstrumentation interface {
 // SelectInstrumentation describes metrics for the Select path.
 type SelectInstrumentation interface {
 	SelectCall()                               // called for every invocation of Select
+	SelectKeys(int)                            // how many keys were requested
 	SelectFirstResponseDuration(time.Duration) // how long until we got the first element
 	SelectPartialError()                       // called when an individual key gave an error from the cluster
 	SelectBlockingDuration(time.Duration)      // time spent waiting for everything
 	SelectOverheadDuration(time.Duration)      // time spent not waiting
 	SelectDuration(time.Duration)              // overall time performing this read (blocking + overhead)
 	SelectSendAllPromotion()                   // called when the read strategy promotes a "SendOne" to a "SendAll" because of missing results
+	SelectRetrieved(int)                       // total number of KeyScoreMembers retrieved from the backing store
+	SelectReturned(int)                        // total number of KeyScoreMembers returned to the caller
 }
 
 // DeleteInstrumentation describes metrics for the Delete path.
@@ -90,6 +93,9 @@ func (i NopInstrumentation) InsertQuorumFailure() {}
 // SelectCall satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) SelectCall() {}
 
+// SelectKeys satisfies the Instrumentation interface but does no work.
+func (i NopInstrumentation) SelectKeys(int) {}
+
 // SelectFirstResponseDuration satisfies the Instrumentation interface but
 // does no work.
 func (i NopInstrumentation) SelectFirstResponseDuration(time.Duration) {}
@@ -111,6 +117,12 @@ func (i NopInstrumentation) SelectDuration(time.Duration) {}
 
 // SelectSendAllPromotion satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) SelectSendAllPromotion() {}
+
+// SelectRetrieved satisfies the Instrumentation interface but does no work.
+func (i NopInstrumentation) SelectRetrieved(int) {}
+
+// SelectReturned satisfies the Instrumentation interface but does no work.
+func (i NopInstrumentation) SelectReturned(int) {}
 
 // DeleteCall satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) DeleteCall() {}
@@ -140,7 +152,7 @@ func (i NopInstrumentation) KeysClusterCompleted() {}
 // KeysFarmCompleted satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) KeysFarmCompleted() {}
 
-// KeysFarmCompleted satisfies the Instrumentation interface but does no work.
+// KeysThrottled satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) KeysThrottled() {}
 
 // RepairCall satisfies the Instrumnetation interface but does no work.
