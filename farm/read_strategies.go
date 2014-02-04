@@ -45,8 +45,8 @@ func SendOneReadOne(farm *Farm) coreReadStrategy {
 			if e.Error != nil {
 				errors = append(errors, e.Error.Error())
 			}
-			response[e.Key] = e.KeyScoreMembers // partial response OK
 			retrieved += len(e.KeyScoreMembers)
+			response[e.Key] = e.KeyScoreMembers // partial response OK
 		}
 		blockingDuration := time.Since(blockingBegan)
 
@@ -260,6 +260,7 @@ func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.D
 					if !ok {
 						break loop // elements already closed, all Selects done.
 					}
+					retrieved += len(e.KeyScoreMembers)
 					if e.Error != nil {
 						go farm.instrumentation.SelectPartialError()
 						continue
@@ -276,7 +277,6 @@ func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.D
 						firstResponseDuration = time.Since(blockingBegan)
 					}
 					responses[e.Key] = append(responses[e.Key], makeSet(e.KeyScoreMembers))
-					retrieved += len(e.KeyScoreMembers)
 					delete(remainingKeys, e.Key)
 
 				case <-timeout:
@@ -298,6 +298,7 @@ func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.D
 				}
 			}
 			blockingDuration := time.Since(blockingBegan)
+			returned := 0
 			defer func() {
 				go func() {
 					duration := time.Since(began)
@@ -305,6 +306,8 @@ func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.D
 					farm.instrumentation.SelectFirstResponseDuration(firstResponseDuration)
 					farm.instrumentation.SelectBlockingDuration(blockingDuration)
 					farm.instrumentation.SelectOverheadDuration(duration - blockingDuration)
+					farm.instrumentation.SelectRetrieved(retrieved)
+					farm.instrumentation.SelectReturned(returned)
 				}()
 			}()
 
@@ -318,14 +321,12 @@ func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.D
 			}
 
 			response := map[string][]common.KeyScoreMember{}
-			returned := 0
-			defer func() { go farm.instrumentation.SelectReturned(returned) }()
 			repairs := keyMemberSet{}
-
 			for key, tupleSets := range responses {
 				union, difference := unionDifference(tupleSets)
-				response[key] = union.orderedLimitedSlice(limit)
-				returned += len(response[key])
+				a := union.orderedLimitedSlice(limit)
+				response[key] = a
+				returned += len(a)
 				repairs.addMany(difference)
 			}
 
@@ -355,12 +356,12 @@ func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.D
 			go func() {
 				lingeringRetrievals := 0
 				for e := range elements {
+					lingeringRetrievals += len(e.KeyScoreMembers)
 					if e.Error != nil {
 						go farm.instrumentation.SelectPartialError()
 						continue
 					}
 					responses[e.Key] = append(responses[e.Key], makeSet(e.KeyScoreMembers))
-					lingeringRetrievals += len(e.KeyScoreMembers)
 				}
 				for _, tupleSets := range responses {
 					_, difference := unionDifference(tupleSets)
@@ -369,7 +370,7 @@ func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.D
 				if len(repairs) > 0 {
 					farm.repairer.requestRepair(repairs.slice())
 				}
-				go farm.instrumentation.SelectRetrieved(lingeringRetrievals) // additive
+				farm.instrumentation.SelectRetrieved(lingeringRetrievals) // additive
 			}()
 			return response, nil
 		}
