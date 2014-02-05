@@ -134,7 +134,7 @@ func (f *Farm) startWalker(walkerRate int) {
 
 	// Start one goroutine per cluster, each of which iterates
 	// endlessly through all the keys of that cluster.
-	for _, i := range rand.Perm(len(f.clusters)) {
+	for i := 0; i < len(f.clusters); i++ {
 		go func(i int) {
 			for {
 				keys := make([]string, 0, maxKeysToWalkPerSelect)
