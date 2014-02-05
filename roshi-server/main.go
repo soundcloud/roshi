@@ -54,6 +54,7 @@ func main() {
 		farmMaxRepairRate        = flag.Int("farm.repair.maxrate", 1000, "Max repairs per second (RateLimited repairer only)")
 		farmMaxRepairBacklog     = flag.Int("farm.repair.maxbacklog", 1000000, "Max number of queued repairs (RateLimited repairer only)")
 		farmWalkerRate           = flag.Int("farm.walker.rate", 1000, "Max keys read per second for data walking. Reduced by the current rate of incoming keys to be read. Set to 0 to disable data walking.")
+		walkOnce                 = flag.Bool("walk.once", false, "If true, the program will exit once the walker has completed one full scan of the farm.")
 		maxSize                  = flag.Int("max.size", 10000, "Maximum number of events per key")
 		statsdAddress            = flag.String("statsd.address", "", "Statsd address (blank to disable)")
 		statsdSampleRate         = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
@@ -119,6 +120,20 @@ func main() {
 		log.Fatalf("unknown hash '%s'", *redisHash)
 	}
 
+	// Channel to report walk completion if required.
+	var walkCompleted chan bool
+	if *walkOnce {
+		walkCompleted = make(chan bool)
+		go func() {
+			<-walkCompleted
+			// TODO: Implement a graceful shutdown once
+			// there is a clean way to do so with the http
+			// server.
+			log.Print("Walk complete. Exiting...")
+			os.Exit(0)
+		}()
+	}
+
 	// Build the farm.
 	farm, err := newFarm(
 		*redisInstances,
@@ -129,6 +144,7 @@ func main() {
 		readStrategy,
 		repairer,
 		*farmWalkerRate,
+		walkCompleted,
 		rp,
 		*maxSize,
 		*statsdSampleRate,
@@ -164,6 +180,7 @@ func newFarm(
 	readStrategy farm.ReadStrategy,
 	repairer farm.Repairer,
 	walkerRate int,
+	walkCompleted chan bool,
 	rp farm.RatePolice,
 	maxSize int,
 	statsdSampleRate float64,
@@ -208,6 +225,7 @@ func newFarm(
 		readStrategy,
 		repairer,
 		walkerRate,
+		walkCompleted,
 		rp,
 		instr,
 	), nil
