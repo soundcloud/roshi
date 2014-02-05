@@ -46,6 +46,10 @@ func (i plaintextInstrumentation) SelectKeys(n int) {
 	fmt.Fprintf(i, "select.call.count %d", n)
 }
 
+func (i plaintextInstrumentation) SelectSendTo(n int) {
+	fmt.Fprintf(i, "select.send_to.count %d", n)
+}
+
 func (i plaintextInstrumentation) SelectFirstResponseDuration(d time.Duration) {
 	fmt.Fprintf(i, "select.first_response.duration_ms %d", d.Nanoseconds()/1e6)
 }

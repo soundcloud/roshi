@@ -53,6 +53,10 @@ func (i statsdInstrumentation) SelectKeys(n int) {
 	i.statter.Counter(i.sampleRate, i.prefix+"select.keys.count", n)
 }
 
+func (i statsdInstrumentation) SelectSendTo(n int) {
+	i.statter.Counter(i.sampleRate, i.prefix+"select.send_to.count", n)
+}
+
 func (i statsdInstrumentation) SelectFirstResponseDuration(d time.Duration) {
 	i.statter.Timing(i.sampleRate, i.prefix+"select.first_response.duration", d)
 }

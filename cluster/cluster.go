@@ -401,7 +401,7 @@ func pipelineRevRange(conn redis.Conn, keys []string, offset, limit int) (map[st
 			return map[string][]common.KeyScoreMember{}, err
 		}
 
-		tuples := make([]common.KeyScoreMember, 0, limit)
+		tuples := make([]common.KeyScoreMember, 0, len(values))
 		for len(values) > 0 {
 			var member string
 			var score float64
