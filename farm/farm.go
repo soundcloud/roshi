@@ -16,7 +16,8 @@ import (
 const (
 	// MaxInt is what you think it is. Unfortunately not provided
 	// by the go math package.
-	MaxInt = int(^uint(0) >> 1)
+	MaxInt                 = int(^uint(0) >> 1)
+	maxKeysToWalkPerSelect = 1000
 )
 
 func init() {
@@ -168,8 +169,8 @@ func (f *Farm) startWalker(walkerRate int) {
 			continue
 		}
 		// Safeguard against excessive batchSize.
-		if batchSize > 10*walkerRate {
-			batchSize = 10 * walkerRate
+		if batchSize > maxKeysToWalkPerSelect {
+			batchSize = maxKeysToWalkPerSelect
 		}
 		keys := []string{}
 		for ; batchSize > 0; batchSize-- {
