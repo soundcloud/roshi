@@ -30,6 +30,7 @@ func SendOneReadOne(farm *Farm) coreReadStrategy {
 		go func() {
 			farm.instrumentation.SelectCall()
 			farm.instrumentation.SelectKeys(len(keys))
+			farm.instrumentation.SelectSendTo(1)
 		}()
 		defer func() { go farm.instrumentation.SelectDuration(time.Since(began)) }()
 
@@ -75,6 +76,7 @@ func SendAllReadAll(farm *Farm) coreReadStrategy {
 		go func() {
 			farm.instrumentation.SelectCall()
 			farm.instrumentation.SelectKeys(len(keys))
+			farm.instrumentation.SelectSendTo(len(farm.clusters))
 		}()
 		defer func() { go farm.instrumentation.SelectDuration(time.Since(began)) }()
 
@@ -233,6 +235,7 @@ func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.D
 			}
 
 			blockingBegan := time.Now()
+			go farm.instrumentation.SelectSendTo(len(clustersUsed))
 			scatterSelects(clustersUsed, keys, offset, limit, &wg, elements)
 
 			// remainingKeys keeps track of all keys for which we haven't
@@ -287,6 +290,7 @@ func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.D
 					for k := range remainingKeys {
 						remainingKeysSlice = append(remainingKeysSlice, k)
 					}
+					go farm.instrumentation.SelectSendTo(len(clustersNotUsed))
 					scatterSelects(clustersNotUsed, remainingKeysSlice, offset, limit, &wg, elements)
 					clustersUsed = farm.clusters
 					clustersNotUsed = []cluster.Cluster{}

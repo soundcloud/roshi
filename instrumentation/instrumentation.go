@@ -28,6 +28,7 @@ type InsertInstrumentation interface {
 type SelectInstrumentation interface {
 	SelectCall()                               // called for every invocation of Select
 	SelectKeys(int)                            // how many keys were requested
+	SelectSendTo(int)                          // how many clusters the read strategy sent the read to
 	SelectFirstResponseDuration(time.Duration) // how long until we got the first element
 	SelectPartialError()                       // called when an individual key gave an error from the cluster
 	SelectBlockingDuration(time.Duration)      // time spent waiting for everything
@@ -95,6 +96,9 @@ func (i NopInstrumentation) SelectCall() {}
 
 // SelectKeys satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) SelectKeys(int) {}
+
+// SelectSendTo satisfies the Instrumentation interface but does no work.
+func (i NopInstrumentation) SelectSendTo(int) {}
 
 // SelectFirstResponseDuration satisfies the Instrumentation interface but
 // does no work.
