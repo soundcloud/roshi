@@ -86,7 +86,7 @@ func New(
 	}
 	farm.readStrategy = readStrategy(farm)
 	farm.repairer = repairer(farm)
-	go farm.startWalker(walkerRate)
+	farm.startWalker(walkerRate)
 	return farm
 }
 
@@ -130,70 +130,80 @@ func (f *Farm) startWalker(walkerRate int) {
 	if walkerRate == 0 {
 		return
 	}
-	keyChannel := make(chan string)
-	walkCompleted := make(chan bool, 1)
+	clusterCompleted := make(chan int)
 
-	// Start a goroutine that endlessly iterates through all
-	// clusters in random order. (It will visit each cluster
-	// exactly once before starting over.) The keys of each
-	// cluster are sent one after another to the keyChannel.
-	go func() {
-		for {
-			anythingSent := false
-			for _, i := range rand.Perm(len(f.clusters)) {
+	// Start one goroutine per cluster, each of which iterates
+	// endlessly through all the keys of that cluster.
+	for _, i := range rand.Perm(len(f.clusters)) {
+		go func(i int) {
+			for {
+				keys := make([]string, 0, maxKeysToWalkPerSelect)
+				batchSize := 0
 				for key := range f.clusters[i].Keys() {
-					keyChannel <- key
-					anythingSent = true
+					// Get a batch size if we have none.
+					for batchSize <= 0 {
+						batchSize = f.ratePolice.Request(walkerRate)
+						if batchSize <= 0 {
+							// Too much traffic. Wait for a sec and try again.
+							f.instrumentation.KeysThrottled()
+							time.Sleep(time.Second)
+						}
+					}
+					// Safeguard against excessive batchSize.
+					if batchSize > maxKeysToWalkPerSelect {
+						batchSize = maxKeysToWalkPerSelect
+					}
+					keys = append(keys, key)
+					if len(keys) >= batchSize {
+						// We are only interested in triggering the
+						// read repair, so we throw away the results
+						// and don't check for errors.
+						f.Select(keys, 0, MaxInt)
+						keys = keys[:0]
+						batchSize = 0
+					}
 				}
-			}
-			f.instrumentation.KeysFarmCompleted()
-			// Report completed if not already done so.
-			select {
-			case walkCompleted <- true:
-			default:
-			}
-			if !anythingSent {
-				// Don't spin too quickly in case of an
-				// empty cluster.
+				// Deal with the remaining odd ones...
+				if len(keys) > 0 {
+					f.Select(keys, 0, MaxInt)
+				}
+				// Report cluster completion.
+				clusterCompleted <- i
+				// Rest for a sec after cluster completion (only matters in case of
+				// empty or almost empty clusters to not spin too quickly).
 				time.Sleep(time.Second)
+			}
+		}(i)
+	}
+
+	// Collect completions of the clusters and report once the
+	// whole farm is complete. We do that once each cluster has
+	// reported completion at least once since we reported a farm
+	// completion the last time.
+	completedClusters := map[int]bool{}
+	go func() {
+		for i := range clusterCompleted {
+			if f.walkCompleted == nil {
+				// We are not asked for completion
+				// reports, so only loop here to drain
+				// the clusterCompleted chan.
+				continue
+			}
+			completedClusters[i] = true
+			if len(completedClusters) == len(f.clusters) {
+				f.instrumentation.KeysFarmCompleted()
+				select {
+				case f.walkCompleted <- true:
+					// Completion reported.
+				default:
+					// Do not block if
+					// f.walkCompleted is not
+					// ready to receive.
+				}
+				completedClusters = map[int]bool{}
 			}
 		}
 	}()
-
-	for {
-		batchSize := f.ratePolice.Request(walkerRate)
-		if batchSize <= 0 {
-			// Too much traffic. Wait for a sec and try again.
-			f.instrumentation.KeysThrottled()
-			time.Sleep(time.Second)
-			continue
-		}
-		// Safeguard against excessive batchSize.
-		if batchSize > maxKeysToWalkPerSelect {
-			batchSize = maxKeysToWalkPerSelect
-		}
-		keys := []string{}
-		for ; batchSize > 0; batchSize-- {
-			keys = append(keys, <-keyChannel)
-		}
-		// We are only interested in triggering the
-		// read repair, so we throw away the results
-		// and don't check for errors.
-		f.Select(keys, 0, MaxInt)
-		// Report completion if we were asked to do so _and_ a
-		// walk was actually reported _and_ the report channel
-		// is ready to receive.
-		if f.walkCompleted != nil {
-			select {
-			case <-walkCompleted:
-				select {
-				case f.walkCompleted <- true:
-				default:
-				}
-			default:
-			}
-		}
-	}
 }
 
 func (f *Farm) write(
