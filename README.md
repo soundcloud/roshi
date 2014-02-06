@@ -111,9 +111,8 @@ For more information on CRDTs, the following resources might be helpful:
 ## Replication
 
 Roshi replicates data over several non-communicating clusters. A typical
-replication factor is 3. Each Roshi instance can serve all requests (Insert,
-Delete, Select) for a client. Roshi has two methods of replicating data:
-during write, and during read-repair.
+replication factor is 3. Roshi has two methods of replicating data: during
+write, and during read-repair.
 
 A write (Insert or Delete) is sent to all clusters. The overall operation
 returns success the moment a user-defined number of clusters return success.
@@ -193,9 +192,9 @@ a set.
 
 ### Data loss
 
-Assuming a replication factor of 3, Roshi makes the following guarantees in
-the presence of failures of Redis instances that represent the same data
-shard:
+Assuming a replication factor of 3, and a write quorum of 2 nodes, Roshi makes
+the following guarantees in the presence of failures of Redis instances that
+represent the same data shard:
 
 Failures | Data loss? | Reads                              | Writes
 ---------|------------|------------------------------------|----------
