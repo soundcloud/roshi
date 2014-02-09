@@ -4,7 +4,7 @@ package shard
 import (
 	"time"
 
-	"github.com/soundcloud/roshi/vendor/redigo/redis"
+	"github.com/garyburd/redigo/redis"
 )
 
 // Shards maintains a connection pool for multiple Redis instances.
