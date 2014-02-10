@@ -297,15 +297,7 @@ Go installed on your computer to build Roshi. If you're on a Mac and use
 
 # I just want to run the HTTP service!
 
-roshi-server uses vendored dependencies and a "blessed build" process to ensure
-stability. The recommended way to get and build roshi-server is
+See the appropriate sections of the [roshi-server README](build-run).
 
-    git clone git@github.com:soundcloud/roshi
-	cd roshi/roshi-server
-	make
-
-Invoking `go get` directly (`go get github.com/soundcloud/roshi/roshi-server`)
-should work, with the caveat that it will download missing dependencies
-directly from their respective master branches, which may not be properly
-tested.
+[build-run]: https://github.com/soundcloud/roshi/blob/master/roshi-server#getting-and-building
 

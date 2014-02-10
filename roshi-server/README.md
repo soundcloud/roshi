@@ -16,9 +16,14 @@ stability over time. Users should get and build roshi-server by cloning this
 repository and running `make` in the roshi-server subdirectory. A working Go
 toolchain is assumed.
 
-It's also possible to build roshi-server with a simple `go build`, with the
-caveat that it will use your normal GOPATH to resolve dependencies, and
-therefore will enforce no constraints on dependency versions.
+    git clone git@github.com:soundcloud/roshi
+    cd roshi/roshi-server
+    make
+
+It's also possible to get roshi-server via `go get`, and/or build it with a
+simple `go build`, with the caveat that it will use your normal GOPATH to
+resolve dependencies, and therefore will enforce no constraints on dependency
+versions, which could introduce bugs or strange behavior.
 
 ## Running
 
