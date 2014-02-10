@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/soundcloud/roshi/shard"
-	"github.com/soundcloud/roshi/vendor/redigo/redis"
+	"github.com/garyburd/redigo/redis"
 )
 
 func TestRecovery(t *testing.T) {

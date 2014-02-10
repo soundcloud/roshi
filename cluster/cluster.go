@@ -13,7 +13,7 @@ import (
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/instrumentation"
 	"github.com/soundcloud/roshi/shard"
-	"github.com/soundcloud/roshi/vendor/redigo/redis"
+	"github.com/garyburd/redigo/redis"
 )
 
 func init() {

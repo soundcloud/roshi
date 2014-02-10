@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/soundcloud/roshi/common"
-	"github.com/soundcloud/roshi/vendor/pat"
+	"github.com/gorilla/pat"
 )
 
 func TestEvaluateScalarPercentage(t *testing.T) {
