@@ -9,6 +9,7 @@ import (
 
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
+	"github.com/tsenart/tb"
 )
 
 // ReadStrategy generates a ReadStrategy for a given Farm. Different core
@@ -151,33 +152,36 @@ func SendAllReadFirstLinger(farm *Farm) coreReadStrategy {
 	return SendVarReadFirstLinger(-1, -1)(farm)
 }
 
-// SendVarReadFirstLinger is a refined version of
-// SendAllReadFirstLinger. It works in the same way but reduces the
-// requests to all clusters under certain circumstances.  If you pass
-// in a RatePolice, it will request permission from it with
-// thresholdKeysReadPerSec as targe rate. Obviously, you should use
-// the same RatePolice as the one the farm is reporting its reads
-// to. If the RatePolice determines that the target rate is already
-// reached, this read strategy will not perform a "SendAll" style read
-// but a "SendOne" style.  "SendOne" has two issues, though: First, no
-// repairs will ever result from a "SendOne" read. Second, if the one
-// cluster the read request is sent to is unable (or slow) to reply,
-// the whole read will fail (or be delayed). The first issue is
-// implicitly solved by SendVarReadFirstLinger because the baseline
-// amount of "SendAll" reads effectively provides a probabilistic
-// repair scheme. To solve the second issue, SendVarReadFirstLinger
-// promotes any "SendOne" read to a "SendAll" read if it was
-// unsuccessful to return any results within a time set by
+// SendVarReadFirstLinger is a refined version of SendAllReadFirstLinger. It
+// works in the same way but reduces the requests to all clusters under
+// certain circumstances.  If you pass in a RatePolice, it will request
+// permission from it with thresholdKeysReadPerSec as targe rate. Obviously,
+// you should use the same RatePolice as the one the farm is reporting its
+// reads to. If the RatePolice determines that the target rate is already
+// reached, this read strategy will not perform a "SendAll" style read but a
+// "SendOne" style.  "SendOne" has two issues, though: First, no repairs will
+// ever result from a "SendOne" read. Second, if the one cluster the read
+// request is sent to is unable (or slow) to reply, the whole read will fail
+// (or be delayed). The first issue is implicitly solved by
+// SendVarReadFirstLinger because the baseline amount of "SendAll" reads
+// effectively provides a probabilistic repair scheme. To solve the second
+// issue, SendVarReadFirstLinger promotes any "SendOne" read to a "SendAll"
+// read if it was unsuccessful to return any results within a time set by
 // thresholdLatency.
 //
-// To never do an initial "SendAll", set thresholdKeysReadPerSec to 0
-// (in which case only the promotion to "SendAll" after
-// thresholdLatency has passed will ever create "SendAll" reads - and
-// only those can trigger repairs!).  For unlimited
-// thresholdKeysReadPerSec, set it to a negative number. To never
-// promote "SendOne" to "SendAll", set thresholdLatency to a negative
-// duration.
-func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.Duration) func(*Farm) coreReadStrategy {
+// To never do an initial "SendAll", set thresholdKeysReadPerSec to 0 (in
+// which case only the promotion to "SendAll" after thresholdLatency has
+// passed will ever create "SendAll" reads - and only those can trigger
+// repairs!).  For unlimited thresholdKeysReadPerSec, set it to a negative
+// number. To never promote "SendOne" to "SendAll", set thresholdLatency to a
+// negative duration.
+func SendVarReadFirstLinger(maxKeysPerSecond int, thresholdLatency time.Duration) func(*Farm) coreReadStrategy {
+	permits := permitter(allowAllPermitter{})
+	if maxKeysPerSecond >= 0 {
+		permits = tokenBucketPermitter{tb.NewBucket(int64(maxKeysPerSecond), -1)}
+	}
+	permits.canHas(0)
+
 	return func(farm *Farm) coreReadStrategy {
 		return func(keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error) {
 			began := time.Now()
@@ -185,25 +189,6 @@ func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.D
 				farm.instrumentation.SelectCall()
 				farm.instrumentation.SelectKeys(len(keys))
 			}()
-
-			var maySendAll bool
-			maySendAll = true // TODO token bucket
-			// switch {
-			// case thresholdKeysReadPerSec > 0:
-			// 	// Our key reads are already reported
-			// 	// to the rate police at this point,
-			// 	// so a permitted number of 0 or more
-			// 	// is OK.
-			// 	if rp.Request(thresholdKeysReadPerSec) >= 0 {
-			// 		maySendAll = true
-			// 	} else {
-			// 		maySendAll = false
-			// 	}
-			// case thresholdKeysReadPerSec == 0:
-			// 	maySendAll = false
-			// case thresholdKeysReadPerSec < 0:
-			// 	maySendAll = true
-			// }
 
 			// We'll combine all response elements into a single channel. When
 			// all clusters have finished sending elements there, close it, so
@@ -221,6 +206,7 @@ func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.D
 			// Depending on maySendAll, pick either one random cluster or all
 			// of them.
 			var clustersUsed, clustersNotUsed []cluster.Cluster
+			maySendAll := permits.canHas(int64(len(keys)))
 			if maySendAll {
 				clustersUsed = farm.clusters
 				clustersNotUsed = []cluster.Cluster{}
@@ -429,3 +415,15 @@ func ksms2kms(ksms []common.KeyScoreMember) []keyMember {
 	}
 	return kms
 }
+
+type permitter interface {
+	canHas(n int64) bool
+}
+
+type tokenBucketPermitter struct{ *tb.Bucket }
+
+func (p tokenBucketPermitter) canHas(n int64) bool { return p.Bucket.Take(n) >= n }
+
+type allowAllPermitter struct{}
+
+func (p allowAllPermitter) canHas(n int64) bool { return true }
