@@ -9,11 +9,21 @@ satisfy your load volume.
 
 [farm]: http://github.com/soundcloud/roshi/blob/master/farm
 
-## Getting
+## Getting and building
 
-```
-go get github.com/soundcloud/roshi/roshi-server
-```
+roshi-server uses vendored dependencies and a "blessed build" process to ensure
+stability over time. Users should get and build roshi-server by cloning this
+repository and running `make` in the roshi-server subdirectory. A working Go
+toolchain is assumed.
+
+    git clone git@github.com:soundcloud/roshi
+    cd roshi/roshi-server
+    make
+
+It's also possible to get roshi-server via `go get`, and/or build it with a
+simple `go build`, with the caveat that it will use your normal GOPATH to
+resolve dependencies, and therefore will enforce no constraints on dependency
+versions, which could introduce bugs or strange behavior.
 
 ## Running
 
@@ -22,6 +32,10 @@ As a demo, start an instance of Redis on the standard port, and run
 ```
 roshi-server -redis.instances=localhost:6379
 ```
+
+This will create a farm with a single cluster containing a single Redis
+instance. All functionality will work as advertised, albeit with effectively
+zero fault-tolerance.
 
 ## API
 
@@ -131,3 +145,5 @@ roshi-server will use very little RAM and comparatively large amount of CPU.
 It may make sense to co-locate a roshi-server instance with every Redis
 instance. (It's been our experience that a single server-class machine is best
 utilized when it runs multiple Redis instances.)
+
+

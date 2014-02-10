@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/soundcloud/roshi/instrumentation"
-	"github.com/soundcloud/roshi/vendor/g2s"
+	"github.com/peterbourgon/g2s"
 )
 
 type statsdInstrumentation struct {

@@ -23,9 +23,9 @@ import (
 	"github.com/soundcloud/roshi/farm"
 	"github.com/soundcloud/roshi/instrumentation/statsd"
 	"github.com/soundcloud/roshi/shard"
-	"github.com/soundcloud/roshi/vendor/g2s"
-	"github.com/soundcloud/roshi/vendor/handy/breaker"
-	"github.com/soundcloud/roshi/vendor/pat"
+	"github.com/peterbourgon/g2s"
+	"github.com/streadway/handy/breaker"
+	"github.com/gorilla/pat"
 )
 
 const (

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/soundcloud/roshi/vendor/redigo/redis"
+	"github.com/garyburd/redigo/redis"
 )
 
 var errDialDeadline = errors.New("couldn't successfully dial an instance")
