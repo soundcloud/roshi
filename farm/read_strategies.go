@@ -148,7 +148,7 @@ func SendAllReadAll(farm *Farm) coreReadStrategy {
 // collected, SendAllReadFirstLinger will determine which keys should be sent
 // to the repairer.
 func SendAllReadFirstLinger(farm *Farm) coreReadStrategy {
-	return SendVarReadFirstLinger(-1, -1, nil)(farm)
+	return SendVarReadFirstLinger(-1, -1)(farm)
 }
 
 // SendVarReadFirstLinger is a refined version of
@@ -177,10 +177,7 @@ func SendAllReadFirstLinger(farm *Farm) coreReadStrategy {
 // thresholdKeysReadPerSec, set it to a negative number. To never
 // promote "SendOne" to "SendAll", set thresholdLatency to a negative
 // duration.
-func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.Duration, rp RatePolice) func(*Farm) coreReadStrategy {
-	if rp == nil || thresholdKeysReadPerSec <= 0 {
-		rp = NewNoPolice()
-	}
+func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.Duration) func(*Farm) coreReadStrategy {
 	return func(farm *Farm) coreReadStrategy {
 		return func(keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error) {
 			began := time.Now()
@@ -190,22 +187,23 @@ func SendVarReadFirstLinger(thresholdKeysReadPerSec int, thresholdLatency time.D
 			}()
 
 			var maySendAll bool
-			switch {
-			case thresholdKeysReadPerSec > 0:
-				// Our key reads are already reported
-				// to the rate police at this point,
-				// so a permitted number of 0 or more
-				// is OK.
-				if rp.Request(thresholdKeysReadPerSec) >= 0 {
-					maySendAll = true
-				} else {
-					maySendAll = false
-				}
-			case thresholdKeysReadPerSec == 0:
-				maySendAll = false
-			case thresholdKeysReadPerSec < 0:
-				maySendAll = true
-			}
+			maySendAll = true // TODO token bucket
+			// switch {
+			// case thresholdKeysReadPerSec > 0:
+			// 	// Our key reads are already reported
+			// 	// to the rate police at this point,
+			// 	// so a permitted number of 0 or more
+			// 	// is OK.
+			// 	if rp.Request(thresholdKeysReadPerSec) >= 0 {
+			// 		maySendAll = true
+			// 	} else {
+			// 		maySendAll = false
+			// 	}
+			// case thresholdKeysReadPerSec == 0:
+			// 	maySendAll = false
+			// case thresholdKeysReadPerSec < 0:
+			// 	maySendAll = true
+			// }
 
 			// We'll combine all response elements into a single channel. When
 			// all clusters have finished sending elements there, close it, so
