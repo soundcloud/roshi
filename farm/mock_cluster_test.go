@@ -70,6 +70,7 @@ func TestMockCluster(t *testing.T) {
 
 // mockCluster is *not* safe for concurrent use.
 type mockCluster struct {
+	id                int32
 	m                 map[string]common.KeyScoreMembers
 	failing           bool
 	countInsert       int32
@@ -80,9 +81,12 @@ type mockCluster struct {
 	countOpenChannels int32
 }
 
+var mockClusterIDs int32
+
 func newMockCluster() *mockCluster {
 	return &mockCluster{
-		m: map[string]common.KeyScoreMembers{},
+		id: atomic.AddInt32(&mockClusterIDs, 1),
+		m:  map[string]common.KeyScoreMembers{},
 	}
 }
 
@@ -134,10 +138,23 @@ func (c *mockCluster) Select(keys []string, offset, limit int) <-chan cluster.El
 			if len(ksms) > limit {
 				ksms = ksms[:limit]
 			}
-			ch <- cluster.Element{Key: key, KeyScoreMembers: ksms}
+			ch <- cluster.Element{Key: key, KeyScoreMembers: uniqueMembers(ksms)}
 		}
 	}()
 	return ch
+}
+
+func uniqueMembers(ksms common.KeyScoreMembers) common.KeyScoreMembers {
+	a := make(common.KeyScoreMembers, 0, len(ksms))
+	members := map[string]struct{}{}
+	for _, ksm := range ksms {
+		if _, ok := members[ksm.Member]; ok {
+			continue
+		}
+		a = append(a, ksm)
+		members[ksm.Member] = struct{}{}
+	}
+	return a
 }
 
 func (c *mockCluster) Delete(tuples []common.KeyScoreMember) error {
@@ -195,6 +212,10 @@ func (c *mockCluster) Keys() chan string {
 		}
 	}()
 	return ch
+}
+
+func (c *mockCluster) clear() {
+	c.m = map[string]common.KeyScoreMembers{}
 }
 
 func newMockClusters(n int) []cluster.Cluster {

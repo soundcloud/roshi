@@ -12,8 +12,8 @@ import (
 	"github.com/tsenart/tb"
 )
 
-// ReadStrategy generates a ReadStrategy for a given Farm. Different core
-// read strategies can provide different QoS guarantees.
+// ReadStrategy generates a core read strategy for a given Farm. Different
+// core read strategies can provide different QoS guarantees.
 type ReadStrategy func(*Farm) coreReadStrategy
 
 // coreReadStrategy encodes one method of satisfying the Select behavior.
@@ -126,7 +126,7 @@ func SendAllReadAll(farm *Farm) coreReadStrategy {
 
 		// Issue read repairs on the difference set.
 		if len(repairs) > 0 {
-			farm.repairer.requestRepair(repairs.slice())
+			go farm.repairStrategy(repairs.slice())
 		}
 
 		// Kapow!
@@ -325,7 +325,7 @@ func SendVarReadFirstLinger(maxKeysPerSecond int, thresholdLatency time.Duration
 				// of errors. Partial results are still better than nothing,
 				// so issue repairs as needed and return the partial results.
 				if len(repairs) > 0 {
-					farm.repairer.requestRepair(repairs.slice())
+					go farm.repairStrategy(repairs.slice())
 				}
 				return response, nil
 			}
@@ -356,18 +356,13 @@ func SendVarReadFirstLinger(maxKeysPerSecond int, thresholdLatency time.Duration
 					repairs.addMany(difference)
 				}
 				if len(repairs) > 0 {
-					farm.repairer.requestRepair(repairs.slice())
+					go farm.repairStrategy(repairs.slice())
 				}
 				farm.instrumentation.SelectRetrieved(lingeringRetrievals) // additive
 			}()
 			return response, nil
 		}
 	}
-}
-
-type responseTuple struct {
-	response map[string][]common.KeyScoreMember
-	err      error
 }
 
 func scatterSelects(

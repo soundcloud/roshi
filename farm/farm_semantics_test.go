@@ -9,7 +9,7 @@ import (
 
 func TestInsertSelect(t *testing.T) {
 	clusters := newMockClusters(3)
-	farm := New(clusters, len(clusters), SendOneReadOne, NopRepairer, nil)
+	farm := New(clusters, len(clusters), SendOneReadOne, NoRepairs, nil)
 
 	if err := farm.Insert([]common.KeyScoreMember{
 		common.KeyScoreMember{Key: "foo", Score: 5, Member: "five"},
@@ -46,7 +46,7 @@ func TestInsertSelect(t *testing.T) {
 
 func TestOffsetLimit(t *testing.T) {
 	clusters := newMockClusters(3)
-	f := New(clusters, len(clusters), SendAllReadAll, NopRepairer, nil)
+	f := New(clusters, len(clusters), SendAllReadAll, NoRepairs, nil)
 
 	if err := f.Insert([]common.KeyScoreMember{
 		common.KeyScoreMember{Key: "foo", Score: 5, Member: "five"},
@@ -85,7 +85,7 @@ func TestSendAllReadAllSelectAfterNoQuorum(t *testing.T) {
 	// Build a farm of 3 clusters: 2 failing, 1 successful
 	clusters := newFailingMockClusters(2)
 	clusters = append(clusters, newMockCluster())
-	f := New(clusters, len(clusters), SendAllReadAll, NopRepairer, nil)
+	f := New(clusters, len(clusters), SendAllReadAll, NoRepairs, nil)
 
 	// Make a single KSM.
 	foo := common.KeyScoreMember{Key: "foo", Score: 1.0, Member: "bar"}
