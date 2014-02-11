@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/garyburd/redigo/redis"
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/instrumentation"
 	"github.com/soundcloud/roshi/shard"
-	"github.com/garyburd/redigo/redis"
 )
 
 func init() {
@@ -67,7 +67,7 @@ type Scorer interface {
 // Redis SCAN command. Note that keys for which only deletes have
 // happened (and no inserts) will not be emitted.
 type Scanner interface {
-	Keys() chan string
+	Keys() <-chan string
 }
 
 const (
@@ -270,7 +270,7 @@ func (c *cluster) Score(key, member string) (float64, bool, error) {
 }
 
 // Keys implements the Scanner interface.
-func (c *cluster) Keys() chan string {
+func (c *cluster) Keys() <-chan string {
 	ch := make(chan string)
 	go func() {
 		defer close(ch)
