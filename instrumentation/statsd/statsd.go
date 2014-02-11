@@ -8,6 +8,9 @@ import (
 	"github.com/soundcloud/roshi/instrumentation"
 )
 
+// Satisfaction guaranteed.
+var _ instrumentation.Instrumentation = statsdInstrumentation{}
+
 type statsdInstrumentation struct {
 	statter    g2s.Statter
 	sampleRate float32
@@ -163,4 +166,8 @@ func (i statsdInstrumentation) RepairWriteFailure() {
 
 func (i statsdInstrumentation) RepairWriteDuration(d time.Duration) {
 	i.statter.Timing(i.sampleRate, i.prefix+"repair.write.duration", d)
+}
+
+func (i statsdInstrumentation) WalkKeys(n int) {
+	i.statter.Counter(i.sampleRate, i.prefix+"walk.keys.count", n)
 }

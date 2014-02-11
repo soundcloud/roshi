@@ -84,7 +84,7 @@ func main() {
 	dst := farm.New(clusters, len(clusters), farm.SendAllReadAll, farm.AllRepairs(clusters, instr), instr)
 	for {
 		src := scan(clusters) // new key set
-		walk(dst, throttle, src, *batchSize, *maxSize)
+		walk(dst, throttle, src, *batchSize, *maxSize, instr)
 		if *once {
 			return
 		}
@@ -139,19 +139,19 @@ func scan(clusters []cluster.Cluster) <-chan string {
 
 func walk(dst farm.Selecter, throttle *throttle, src <-chan string, batchSize, maxSize int, instr instrumentation.WalkInstrumentation) {
 	batch := []string{}
+	waitSelectReset := func() {
+		throttle.wait(int64(len(batch)))
+		dst.Select(batch, 0, maxSize)
+		instr.WalkKeys(len(batch))
+		batch = []string{}
+	}
 	for key := range src {
 		batch = append(batch, key)
 		if len(batch) >= batchSize {
-			throttle.wait(int64(batchSize))
-			began := time.Now()
-			dst.Select(batch, 0, maxSize)
-			batch = []string{}
+			waitSelectReset()
 		}
 	}
-	if len(batch) > 0 {
-		throttle.wait(int64(batchSize))
-		dst.Select(batch, 0, maxSize)
-	}
+	waitSelectReset()
 }
 
 type throttle struct {

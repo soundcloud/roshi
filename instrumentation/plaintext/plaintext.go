@@ -9,6 +9,9 @@ import (
 	"github.com/soundcloud/roshi/instrumentation"
 )
 
+// Satisfaction guaranteed.
+var _ instrumentation.Instrumentation = plaintextInstrumentation{}
+
 type plaintextInstrumentation struct{ io.Writer }
 
 // New returns a new Instrumentation that prints metrics to the passed
@@ -155,4 +158,8 @@ func (i plaintextInstrumentation) RepairWriteFailure() {
 
 func (i plaintextInstrumentation) RepairWriteDuration(d time.Duration) {
 	fmt.Fprintf(i, "repair.write.duration_ms %d", d.Nanoseconds()/1e6)
+}
+
+func (i plaintextInstrumentation) WalkKeys(n int) {
+	fmt.Fprintf(i, "walk.keys.count %d", n)
 }
