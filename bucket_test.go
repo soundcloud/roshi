@@ -1,6 +1,7 @@
 package tb
 
 import (
+	"runtime"
 	"testing"
 	"time"
 )
@@ -86,9 +87,12 @@ func TestBucket_Put_multi(t *testing.T) {
 
 func TestBucket_Take_throughput(t *testing.T) {
 	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping test in short mode")
 	}
+
+	runtime.GOMAXPROCS(2)
 
 	b := NewBucket(1000, -1)
 	defer b.Close()
