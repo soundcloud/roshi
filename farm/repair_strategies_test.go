@@ -69,7 +69,7 @@ func TestRateLimitedRepairs(t *testing.T) {
 
 	// Perform all repairs as fast as possible.
 	maxRepairsPerSecond := 2
-	repairFunc := RateLimitedRepairs(clusters, instrumentation.NopInstrumentation{}, maxRepairsPerSecond)
+	repairFunc := RateLimitedRepairs(maxRepairsPerSecond)(clusters, instrumentation.NopInstrumentation{})
 	repairFunc([]keyMember{keyMember{Key: "foo", Member: "alpha"}}) // should succeed
 	repairFunc([]keyMember{keyMember{Key: "foo", Member: "beta"}})  // should succeed
 	repairFunc([]keyMember{keyMember{Key: "foo", Member: "delta"}}) // should fail

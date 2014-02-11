@@ -81,7 +81,7 @@ func main() {
 	throttle := newThrottle(*maxKeysPerSecond)
 
 	// Perform the walk
-	dst := farm.New(clusters, len(clusters), farm.SendAllReadAll, farm.AllRepairs(clusters, instr), instr)
+	dst := farm.New(clusters, len(clusters), farm.SendAllReadAll, farm.AllRepairs, instr)
 	for {
 		src := scan(clusters) // new key set
 		walk(dst, throttle, src, *batchSize, *maxSize, instr)

@@ -9,11 +9,12 @@ import (
 	"github.com/tsenart/tb"
 )
 
-// repairStrategy denotes one method for processing repair requests. Repair
-// strategies probably need to close over a slice of clusters and a repair
-// instrumentation.  Different repair strategies can provide different e.g.
-// load guarantees.
-type repairStrategy func(kms []keyMember)
+// RepairStrategy generates a core repair strategy for a specific set of
+// Clusters.
+type RepairStrategy func([]cluster.Cluster, instrumentation.RepairInstrumentation) coreRepairStrategy
+
+// coreRepairStrategy encodes one way of performing repair requests.
+type coreRepairStrategy func(kms []keyMember)
 
 // keyMember is like a KeyScoreMember, just without score. It is used to pass
 // "suspects" to the core repair strategy.
@@ -22,10 +23,10 @@ type keyMember struct {
 	Member string
 }
 
-// AllRepairs is the repair strategy that does what you expect: actually
-// issuing the repairs with 100% probability. You may want to use
-// RateLimitedRepairs to cap the load to your clusters.
-func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrumentation) repairStrategy {
+// AllRepairs is a RepairStrategy that does what you expect: actually issuing
+// the repairs with 100% probability. You may want to use RateLimitedRepairs
+// to cap the load to your clusters.
+func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrumentation) coreRepairStrategy {
 	return func(kms []keyMember) {
 		type scoreTuple struct {
 			score       float64
@@ -123,21 +124,25 @@ func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrume
 }
 
 // NoRepairs is a no-op repair strategy.
-func NoRepairs([]keyMember) {}
+func NoRepairs([]cluster.Cluster, instrumentation.RepairInstrumentation) coreRepairStrategy {
+	return func([]keyMember) {}
+}
 
-// RateLimitedRepairs is a repair strategy which limits the total number of
-// repaired key-member tuples to maxKeysPerSecond. Pass a negative value to
-// allow unlimited repair.
-func RateLimitedRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrumentation, maxKeysPerSecond int) repairStrategy {
-	permits := permitter(allowAllPermitter{})
-	if maxKeysPerSecond >= 0 {
-		permits = permitter(tokenBucketPermitter{tb.NewBucket(int64(maxKeysPerSecond), 1)})
-	}
-	return func(kms []keyMember) {
-		if n := len(kms); !permits.canHas(int64(n)) {
-			instr.RepairDiscarded(n)
-			return
+// RateLimitedRepairs is a RepairStrategy generator, which limits the total
+// number of repaired key-member tuples to maxKeysPerSecond. Pass a negative
+// value to allow unlimited repair.
+func RateLimitedRepairs(maxKeysPerSecond int) RepairStrategy {
+	return func(clusters []cluster.Cluster, instr instrumentation.RepairInstrumentation) coreRepairStrategy {
+		permits := permitter(allowAllPermitter{})
+		if maxKeysPerSecond >= 0 {
+			permits = permitter(tokenBucketPermitter{tb.NewBucket(int64(maxKeysPerSecond), 1)})
 		}
-		AllRepairs(clusters, instr)(kms)
+		return func(kms []keyMember) {
+			if n := len(kms); !permits.canHas(int64(n)) {
+				instr.RepairDiscarded(n)
+				return
+			}
+			AllRepairs(clusters, instr)(kms)
+		}
 	}
 }

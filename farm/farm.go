@@ -22,7 +22,7 @@ type Farm struct {
 	clusters        []cluster.Cluster
 	writeQuorum     int
 	readStrategy    coreReadStrategy
-	repairStrategy  repairStrategy
+	repairStrategy  coreRepairStrategy
 	instrumentation instrumentation.Instrumentation
 }
 
@@ -38,7 +38,7 @@ func New(
 	clusters []cluster.Cluster,
 	writeQuorum int,
 	readStrategy ReadStrategy,
-	repairStrategy repairStrategy,
+	repairStrategy RepairStrategy,
 	instr instrumentation.Instrumentation,
 ) *Farm {
 	if instr == nil {
@@ -47,7 +47,7 @@ func New(
 	farm := &Farm{
 		clusters:        clusters,
 		writeQuorum:     writeQuorum,
-		repairStrategy:  repairStrategy,
+		repairStrategy:  repairStrategy(clusters, instr),
 		instrumentation: instr,
 	}
 	farm.readStrategy = readStrategy(farm)

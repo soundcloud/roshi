@@ -196,7 +196,7 @@ func (c *mockCluster) Score(key, member string) (float64, bool, error) {
 	return 0, false, fmt.Errorf("no member '%s' found for key '%s'", member, key)
 }
 
-func (c *mockCluster) Keys() chan string {
+func (c *mockCluster) Keys() <-chan string {
 	atomic.AddInt32(&c.countKeys, 1)
 	ch := make(chan string)
 	m := map[string]common.KeyScoreMembers{}

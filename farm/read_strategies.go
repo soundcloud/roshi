@@ -417,7 +417,13 @@ type permitter interface {
 
 type tokenBucketPermitter struct{ *tb.Bucket }
 
-func (p tokenBucketPermitter) canHas(n int64) bool { return p.Bucket.Take(n) >= n }
+func (p tokenBucketPermitter) canHas(n int64) bool {
+	if got := p.Bucket.Take(n); got < n {
+		p.Bucket.Put(got)
+		return false
+	}
+	return true
+}
 
 type allowAllPermitter struct{}
 

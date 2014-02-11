@@ -2,6 +2,7 @@ package farm
 
 import (
 	"fmt"
+	"github.com/soundcloud/roshi/instrumentation"
 	"runtime"
 	"sync/atomic"
 	"testing"
@@ -49,9 +50,11 @@ func totalOpenChannelCount(clusters []cluster.Cluster) int {
 
 // MockRepairs is similar to NoRepairs, but counts the keyMembers for which a
 // repair was requested. This is useful in unit tests.
-func MockRepairs(repairCount *int32) repairStrategy {
-	return func(kms []keyMember) {
-		atomic.AddInt32(repairCount, int32(len(kms)))
+func MockRepairs(repairCount *int32) RepairStrategy {
+	return func([]cluster.Cluster, instrumentation.RepairInstrumentation) coreRepairStrategy {
+		return func(kms []keyMember) {
+			atomic.AddInt32(repairCount, int32(len(kms)))
+		}
 	}
 }
 

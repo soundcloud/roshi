@@ -18,14 +18,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/pat"
+	"github.com/peterbourgon/g2s"
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/farm"
 	"github.com/soundcloud/roshi/instrumentation/statsd"
 	"github.com/soundcloud/roshi/shard"
-	"github.com/peterbourgon/g2s"
 	"github.com/streadway/handy/breaker"
-	"github.com/gorilla/pat"
 )
 
 const (
@@ -40,25 +40,24 @@ var (
 
 func main() {
 	var (
-		redisInstances           = flag.String("redis.instances", "", "Semicolon-separated list of comma-separated lists of Redis instances")
-		redisConnectTimeout      = flag.Duration("redis.connect.timeout", 3*time.Second, "Redis connect timeout")
-		redisReadTimeout         = flag.Duration("redis.read.timeout", 3*time.Second, "Redis read timeout")
-		redisWriteTimeout        = flag.Duration("redis.write.timeout", 3*time.Second, "Redis write timeout")
-		redisMCPI                = flag.Int("redis.mcpi", 10, "Max connections per Redis instance")
-		redisHash                = flag.String("redis.hash", "murmur3", "Redis hash function: murmur3, fnv, fnva")
-		farmWriteQuorum          = flag.String("farm.write.quorum", "100%", "Write quorum, either number of clusters (2) or percentage of clusters (51%)")
-		farmReadStrategy         = flag.String("farm.read.strategy", "SendAllReadAll", "Farm read strategy: SendAllReadAll, SendOneReadOne, SendAllReadFirstLinger, SendVarReadFirstLinger")
-		farmReadThresholdRate    = flag.Int("farm.read.threshold.rate", 2000, "Baseline SendAll keys read per sec, additional keys are SendOne (SendVarReadFirstLinger strategy only)")
-		farmReadThresholdLatency = flag.Duration("farm.read.threshold.latency", 50*time.Millisecond, "If a SendOne read has not returned anything after this latency, it's promoted to SendAll (SendVarReadFirstLinger strategy only)")
-		farmRepairer             = flag.String("farm.repairer", "RateLimited", "Farm repairer: RateLimited, Nop")
-		farmMaxRepairRate        = flag.Int("farm.repair.maxrate", 1000, "Max repairs per second (RateLimited repairer only)")
-		farmMaxRepairBacklog     = flag.Int("farm.repair.maxbacklog", 1000000, "Max number of queued repairs (RateLimited repairer only)")
-		maxSize                  = flag.Int("max.size", 10000, "Maximum number of events per key")
-		statsdAddress            = flag.String("statsd.address", "", "Statsd address (blank to disable)")
-		statsdSampleRate         = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
-		statsdBucketPrefix       = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
-		httpCircuitBreaker       = flag.Bool("http.circuit.breaker", true, "Enable HTTP server circuit breaker")
-		httpAddress              = flag.String("http.address", ":6302", "HTTP listen address")
+		redisInstances             = flag.String("redis.instances", "", "Semicolon-separated list of comma-separated lists of Redis instances")
+		redisConnectTimeout        = flag.Duration("redis.connect.timeout", 3*time.Second, "Redis connect timeout")
+		redisReadTimeout           = flag.Duration("redis.read.timeout", 3*time.Second, "Redis read timeout")
+		redisWriteTimeout          = flag.Duration("redis.write.timeout", 3*time.Second, "Redis write timeout")
+		redisMCPI                  = flag.Int("redis.mcpi", 10, "Max connections per Redis instance")
+		redisHash                  = flag.String("redis.hash", "murmur3", "Redis hash function: murmur3, fnv, fnva")
+		farmWriteQuorum            = flag.String("farm.write.quorum", "100%", "Write quorum, either number of clusters (2) or percentage of clusters (51%)")
+		farmReadStrategy           = flag.String("farm.read.strategy", "SendAllReadAll", "Farm read strategy: SendAllReadAll, SendOneReadOne, SendAllReadFirstLinger, SendVarReadFirstLinger")
+		farmReadThresholdRate      = flag.Int("farm.read.threshold.rate", 2000, "Baseline SendAll keys read per sec, additional keys are SendOne (SendVarReadFirstLinger strategy only)")
+		farmReadThresholdLatency   = flag.Duration("farm.read.threshold.latency", 50*time.Millisecond, "If a SendOne read has not returned anything after this latency, it's promoted to SendAll (SendVarReadFirstLinger strategy only)")
+		farmRepairStrategy         = flag.String("farm.repair.strategy", "RateLimited", "Farm repair strategy: AllRepairs, NoRepairs, RateLimitedRepairs")
+		farmRepairMaxKeysPerSecond = flag.Int("farm.repair.max.keys.per.second", 1000, "Max repaired keys per second (RateLimited repairer only)")
+		maxSize                    = flag.Int("max.size", 10000, "Maximum number of events per key")
+		statsdAddress              = flag.String("statsd.address", "", "Statsd address (blank to disable)")
+		statsdSampleRate           = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
+		statsdBucketPrefix         = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
+		httpCircuitBreaker         = flag.Bool("http.circuit.breaker", true, "Enable HTTP server circuit breaker")
+		httpAddress                = flag.String("http.address", ":6302", "HTTP listen address")
 	)
 	flag.Parse()
 	log.Printf("GOMAXPROCS %d", runtime.GOMAXPROCS(-1))
@@ -88,15 +87,17 @@ func main() {
 	}
 	log.Printf("using %s read strategy", *farmReadStrategy)
 
-	// Parse repairer.
-	var repairer farm.Repairer
-	switch strings.ToLower(*farmRepairer) {
-	case "nop":
-		repairer = farm.NopRepairer
-	case "ratelimited":
-		repairer = farm.RateLimitedRepairer(*farmMaxRepairRate, *farmMaxRepairBacklog)
+	// Parse repair strategy.
+	var repairStrategy farm.RepairStrategy
+	switch strings.ToLower(*farmRepairStrategy) {
+	case "allrepairs":
+		repairStrategy = farm.AllRepairs
+	case "norepairs":
+		repairStrategy = farm.NoRepairs
+	case "ratelimitedrepairs":
+		repairStrategy = farm.RateLimitedRepairs(*farmRepairMaxKeysPerSecond)
 	default:
-		log.Fatalf("unknown repairer '%s'", *farmRepairer)
+		log.Fatalf("unknown repair strategy '%s'", *farmRepairStrategy)
 	}
 
 	// Parse hash function.
@@ -120,7 +121,7 @@ func main() {
 		*redisMCPI,
 		hashFunc,
 		readStrategy,
-		repairer,
+		repairStrategy,
 		*maxSize,
 		*statsdSampleRate,
 		*statsdBucketPrefix,
@@ -153,7 +154,7 @@ func newFarm(
 	redisMCPI int,
 	hash func(string) uint32,
 	readStrategy farm.ReadStrategy,
-	repairer farm.Repairer,
+	repairStrategy farm.RepairStrategy,
 	maxSize int,
 	statsdSampleRate float64,
 	bucketPrefix string,
@@ -195,7 +196,7 @@ func newFarm(
 		clusters,
 		writeQuorum,
 		readStrategy,
-		repairer,
+		repairStrategy,
 		instr,
 	), nil
 }
