@@ -50,7 +50,7 @@ func main() {
 		farmReadStrategy           = flag.String("farm.read.strategy", "SendAllReadAll", "Farm read strategy: SendAllReadAll, SendOneReadOne, SendAllReadFirstLinger, SendVarReadFirstLinger")
 		farmReadThresholdRate      = flag.Int("farm.read.threshold.rate", 2000, "Baseline SendAll keys read per sec, additional keys are SendOne (SendVarReadFirstLinger strategy only)")
 		farmReadThresholdLatency   = flag.Duration("farm.read.threshold.latency", 50*time.Millisecond, "If a SendOne read has not returned anything after this latency, it's promoted to SendAll (SendVarReadFirstLinger strategy only)")
-		farmRepairStrategy         = flag.String("farm.repair.strategy", "RateLimited", "Farm repair strategy: AllRepairs, NoRepairs, RateLimitedRepairs")
+		farmRepairStrategy         = flag.String("farm.repair.strategy", "RateLimitedRepairs", "Farm repair strategy: AllRepairs, NoRepairs, RateLimitedRepairs")
 		farmRepairMaxKeysPerSecond = flag.Int("farm.repair.max.keys.per.second", 1000, "Max repaired keys per second (RateLimited repairer only)")
 		maxSize                    = flag.Int("max.size", 10000, "Maximum number of events per key")
 		statsdAddress              = flag.String("statsd.address", "", "Statsd address (blank to disable)")
