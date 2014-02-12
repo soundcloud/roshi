@@ -168,7 +168,8 @@ instance, there are two options:
    the last write respected by the replica and the first write respected by the
    new instance. This gap might be fixed by subsequent read-repairs.
 
-These properties and procedures warrant careful consideration.
+Both processes can be expedited via a [keyspace walker process][roshi-walker].
+Nevertheless, these properties and procedures warrant careful consideration.
 
 ## Considerations
 
@@ -254,6 +255,10 @@ job with a relatively small surface area. From the bottom up...
   REST-ish HTTP interface. It's effectively stateless, and [12-factor][twelve]
   compliant.
 
+- **[roshi-walker][roshi-walker]** walks the keyspace in semirandom order at a
+  defined rate, making Select requests for each key in order to trigger read
+  repairs.
+
 [sorted-set]: http://redis.io/commands#sorted_set
 [shard]: http://github.com/soundcloud/roshi/tree/master/shard
 [cluster]: http://github.com/soundcloud/roshi/tree/master/cluster
@@ -261,6 +266,7 @@ job with a relatively small surface area. From the bottom up...
 [farm]: http://github.com/soundcloud/roshi/tree/master/farm
 [roshi-server]: http://github.com/soundcloud/roshi/tree/master/roshi-server
 [twelve]: http://12factor.net
+[roshi-walker]: http://github.com/soundcloud/roshi/tree/master/roshi-walker
 
 ## The big picture
 

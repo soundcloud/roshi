@@ -80,11 +80,11 @@ func main() {
 	// Set up our rate limiter. Remember: it's per-key, not per-request.
 	throttle := newThrottle(*maxKeysPerSecond)
 
-	// Perform the walk
+	// Perform the walk.
 	dst := farm.New(clusters, len(clusters), farm.SendAllReadAll, farm.AllRepairs, instr)
 	for {
 		src := scan(clusters) // new key set
-		walk(dst, throttle, src, *batchSize, *maxSize, instr)
+		walkOnce(dst, throttle, src, *batchSize, *maxSize, instr)
 		if *once {
 			return
 		}
@@ -137,7 +137,13 @@ func scan(clusters []cluster.Cluster) <-chan string {
 	return c
 }
 
-func walk(dst farm.Selecter, throttle *throttle, src <-chan string, batchSize, maxSize int, instr instrumentation.WalkInstrumentation) {
+func walkOnce(
+	dst farm.Selecter,
+	throttle *throttle,
+	src <-chan string,
+	batchSize, maxSize int,
+	instr instrumentation.WalkInstrumentation,
+) {
 	batch := []string{}
 	waitSelectReset := func() {
 		throttle.wait(int64(len(batch)))
