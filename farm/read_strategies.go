@@ -126,7 +126,10 @@ func SendAllReadAll(farm *Farm) coreReadStrategy {
 
 		// Issue read repairs on the difference set.
 		if len(repairs) > 0 {
-			go farm.repairStrategy(repairs.slice())
+			go func() {
+				farm.instrumentation.SelectRepairNeeded(len(repairs))
+				farm.repairStrategy(repairs.slice())
+			}()
 		}
 
 		// Kapow!
@@ -356,7 +359,10 @@ func SendVarReadFirstLinger(maxKeysPerSecond int, thresholdLatency time.Duration
 					repairs.addMany(difference)
 				}
 				if len(repairs) > 0 {
-					go farm.repairStrategy(repairs.slice())
+					go func() {
+						farm.instrumentation.SelectRepairNeeded(len(repairs))
+						farm.repairStrategy(repairs.slice())
+					}()
 				}
 				farm.instrumentation.SelectRetrieved(lingeringRetrievals) // additive
 			}()

@@ -38,6 +38,7 @@ type SelectInstrumentation interface {
 	SelectSendAllPromotion()                   // called when the read strategy promotes a "SendOne" to a "SendAll" because of missing results
 	SelectRetrieved(int)                       // total number of KeyScoreMembers retrieved from the backing store
 	SelectReturned(int)                        // total number of KeyScoreMembers returned to the caller
+	SelectRepairNeeded(int)                    // +N, where N is every keyMember detected in a difference set (prior to entering repair strategy)
 }
 
 // DeleteInstrumentation describes metrics for the Delete path.
@@ -125,6 +126,9 @@ func (i NopInstrumentation) SelectRetrieved(int) {}
 
 // SelectReturned satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) SelectReturned(int) {}
+
+// SelectRepairNeeded satisfies the Instrumentation interface but does no work.
+func (i NopInstrumentation) SelectRepairNeeded(int) {}
 
 // DeleteCall satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) DeleteCall() {}

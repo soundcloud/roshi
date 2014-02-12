@@ -92,6 +92,10 @@ func (i statsdInstrumentation) SelectReturned(n int) {
 	i.statter.Counter(i.sampleRate, i.prefix+"select.returned.count", n)
 }
 
+func (i statsdInstrumentation) SelectRepairNeeded(n int) {
+	i.statter.Counter(i.sampleRate, i.prefix+"select.repair_needed.count", n)
+}
+
 func (i statsdInstrumentation) DeleteCall() {
 	i.statter.Counter(i.sampleRate, i.prefix+"delete.call.count", 1)
 }
@@ -137,11 +141,11 @@ func (i statsdInstrumentation) RepairDiscarded(n int) {
 }
 
 func (i statsdInstrumentation) RepairWriteSuccess(n int) {
-	i.statter.Counter(i.sampleRate, i.prefix+"repair.write.success.count", n)
+	i.statter.Counter(i.sampleRate, i.prefix+"repair.write_success.count", n)
 }
 
 func (i statsdInstrumentation) RepairWriteFailure(n int) {
-	i.statter.Counter(i.sampleRate, i.prefix+"repair.write.failure.count", n)
+	i.statter.Counter(i.sampleRate, i.prefix+"repair.write_failure.count", n)
 }
 
 func (i statsdInstrumentation) WalkKeys(n int) {

@@ -80,8 +80,13 @@ func (i plaintextInstrumentation) SelectSendAllPromotion() {
 func (i plaintextInstrumentation) SelectRetrieved(n int) {
 	fmt.Fprintf(i, "select.retrieved.count %d", n)
 }
+
 func (i plaintextInstrumentation) SelectReturned(n int) {
 	fmt.Fprintf(i, "select.returned.count %d", n)
+}
+
+func (i plaintextInstrumentation) SelectRepairNeeded(n int) {
+	fmt.Fprintf(i, "select.repair_needed.count %d", n)
 }
 
 func (i plaintextInstrumentation) DeleteCall() {
@@ -129,11 +134,11 @@ func (i plaintextInstrumentation) RepairDiscarded(n int) {
 }
 
 func (i plaintextInstrumentation) RepairWriteSuccess(n int) {
-	fmt.Fprintf(i, "repair.write.success.count %d", n)
+	fmt.Fprintf(i, "repair.write_success.count %d", n)
 }
 
 func (i plaintextInstrumentation) RepairWriteFailure(n int) {
-	fmt.Fprintf(i, "repair.write.failure.count %d", n)
+	fmt.Fprintf(i, "repair.write_failure.count %d", n)
 }
 
 func (i plaintextInstrumentation) WalkKeys(n int) {
