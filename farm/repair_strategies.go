@@ -141,11 +141,11 @@ func NoRepairs([]cluster.Cluster, instrumentation.RepairInstrumentation) coreRep
 // number of repaired key-member tuples to maxKeysPerSecond. Pass a negative
 // value to allow unlimited repair.
 func RateLimitedRepairs(maxKeysPerSecond int) RepairStrategy {
+	permits := permitter(allowAllPermitter{})
+	if maxKeysPerSecond >= 0 {
+		permits = permitter(tokenBucketPermitter{tb.NewBucket(int64(maxKeysPerSecond), 1)})
+	}
 	return func(clusters []cluster.Cluster, instr instrumentation.RepairInstrumentation) coreRepairStrategy {
-		permits := permitter(allowAllPermitter{})
-		if maxKeysPerSecond >= 0 {
-			permits = permitter(tokenBucketPermitter{tb.NewBucket(int64(maxKeysPerSecond), 1)})
-		}
 		return func(kms []keyMember) {
 			if n := len(kms); !permits.canHas(int64(n)) {
 				instr.RepairDiscarded(n)
