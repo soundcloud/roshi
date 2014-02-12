@@ -13,6 +13,7 @@ type Instrumentation interface {
 	DeleteInstrumentation
 	KeysInstrumentation
 	RepairInstrumentation
+	WalkInstrumentation
 }
 
 // InsertInstrumentation describes metrics for the Insert path.
@@ -53,8 +54,6 @@ type KeysInstrumentation interface {
 	KeysFailure()           // called when an instance runs into an error and is therefore skipped
 	KeysInstanceCompleted() // called when done scanning the keys of one instance (with or without errors)
 	KeysClusterCompleted()  // called when done scanning the keys of a whole cluster (with or without errors)
-	KeysFarmCompleted()     // called when done scanning the keys of a whole farm (with or without errors)
-	KeysThrottled()         // called when key scanning is stopped (for 1s) to not interfere with actual queries
 }
 
 // RepairInstrumentation describes metrics for Repairs.
@@ -70,6 +69,11 @@ type RepairInstrumentation interface {
 	RepairWriteSuccess()               // called (separately per cluster) after a KeyScoreMember was successfully written
 	RepairWriteFailure()               // called (separately per cluster) after writing a KeyScoreMember failed
 	RepairWriteDuration(time.Duration) // time spent (per cluster) writing the KeyScoreMember
+}
+
+// WalkInstrumentation describes metrics for walkers.
+type WalkInstrumentation interface {
+	WalkKeys(int) // +N, where N is the number of keys received from a Scanner and sent for Select
 }
 
 // NopInstrumentation satisfies the Instrumentation interface but does no work.
@@ -153,41 +157,38 @@ func (i NopInstrumentation) KeysInstanceCompleted() {}
 // KeysClusterCompleted satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) KeysClusterCompleted() {}
 
-// KeysFarmCompleted satisfies the Instrumentation interface but does no work.
-func (i NopInstrumentation) KeysFarmCompleted() {}
-
-// KeysThrottled satisfies the Instrumentation interface but does no work.
-func (i NopInstrumentation) KeysThrottled() {}
-
-// RepairCall satisfies the Instrumnetation interface but does no work.
+// RepairCall satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairCall() {}
 
-// RepairRequestCount satisfies the Instrumnetation interface but does no work.
+// RepairRequestCount satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairRequestCount(int) {}
 
-// RepairDiscarded satisfies the Instrumnetation interface but does no work.
+// RepairDiscarded satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairDiscarded(int) {}
 
-// RepairCheckPartialFailure satisfies the Instrumnetation interface but does no work.
+// RepairCheckPartialFailure satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairCheckPartialFailure() {}
 
-// RepairCheckCompleteFailure satisfies the Instrumnetation interface but does no work.
+// RepairCheckCompleteFailure satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairCheckCompleteFailure() {}
 
-// RepairCheckDuration satisfies the Instrumnetation interface but does no work.
+// RepairCheckDuration satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairCheckDuration(time.Duration) {}
 
-// RepairCheckRedundant satisfies the Instrumnetation interface but does no work.
+// RepairCheckRedundant satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairCheckRedundant() {}
 
-// RepairWriteCount satisfies the Instrumnetation interface but does no work.
+// RepairWriteCount satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairWriteCount() {}
 
-// RepairWriteSuccess satisfies the Instrumnetation interface but does no work.
+// RepairWriteSuccess satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairWriteSuccess() {}
 
-// RepairWriteFailure satisfies the Instrumnetation interface but does no work.
+// RepairWriteFailure satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairWriteFailure() {}
 
-// RepairWriteDuration satisfies the Instrumnetation interface but does no work.
+// RepairWriteDuration satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairWriteDuration(time.Duration) {}
+
+// WalkKeys satisfies the Instrumentation interface but does no work.
+func (i NopInstrumentation) WalkKeys(int) {}

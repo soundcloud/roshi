@@ -4,9 +4,12 @@ package statsd
 import (
 	"time"
 
-	"github.com/soundcloud/roshi/instrumentation"
 	"github.com/peterbourgon/g2s"
+	"github.com/soundcloud/roshi/instrumentation"
 )
+
+// Satisfaction guaranteed.
+var _ instrumentation.Instrumentation = statsdInstrumentation{}
 
 type statsdInstrumentation struct {
 	statter    g2s.Statter
@@ -121,14 +124,6 @@ func (i statsdInstrumentation) KeysClusterCompleted() {
 	i.statter.Counter(i.sampleRate, i.prefix+"keys.cluster_completed.count", 1)
 }
 
-func (i statsdInstrumentation) KeysFarmCompleted() {
-	i.statter.Counter(i.sampleRate, i.prefix+"keys.farm_completed.count", 1)
-}
-
-func (i statsdInstrumentation) KeysThrottled() {
-	i.statter.Counter(i.sampleRate, i.prefix+"keys.throttled.count", 1)
-}
-
 func (i statsdInstrumentation) RepairCall() {
 	i.statter.Counter(i.sampleRate, i.prefix+"repair.call.count", 1)
 }
@@ -171,4 +166,8 @@ func (i statsdInstrumentation) RepairWriteFailure() {
 
 func (i statsdInstrumentation) RepairWriteDuration(d time.Duration) {
 	i.statter.Timing(i.sampleRate, i.prefix+"repair.write.duration", d)
+}
+
+func (i statsdInstrumentation) WalkKeys(n int) {
+	i.statter.Counter(i.sampleRate, i.prefix+"walk.keys.count", n)
 }

@@ -2,6 +2,8 @@ package farm
 
 import (
 	"fmt"
+	"github.com/soundcloud/roshi/instrumentation"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -11,7 +13,7 @@ import (
 )
 
 var (
-	ksm = common.KeyScoreMember{Key: "key", Score: 3.14, Member: "member"}
+	testingKeyScoreMember = common.KeyScoreMember{Key: "key", Score: 3.14, Member: "member"}
 )
 
 func checkResult(result map[string][]common.KeyScoreMember, err error) error {
@@ -24,7 +26,7 @@ func checkResult(result map[string][]common.KeyScoreMember, err error) error {
 	if expected, got := 1, len(result["key"]); expected != got {
 		return fmt.Errorf("expected result length %v, got %v", expected, got)
 	}
-	if expected, got := ksm, result["key"][0]; expected != got {
+	if expected, got := testingKeyScoreMember, result["key"][0]; expected != got {
 		return fmt.Errorf("expected ksm %v, got %v", expected, got)
 	}
 	return nil
@@ -46,22 +48,21 @@ func totalOpenChannelCount(clusters []cluster.Cluster) int {
 	return sum
 }
 
-// MockRepairer is similar to NopRepairer, but counts the keyMembers
-// for which a repair was requested. This is useful in unit tests.
-func MockRepairer(*Farm) coreRepairer { return &mockCoreRepairer{} }
-
-type mockCoreRepairer struct{ requestCount int32 }
-
-func (r *mockCoreRepairer) requestRepair(reqs []keyMember) {
-	atomic.AddInt32(&r.requestCount, int32(len(reqs)))
+// MockRepairs is similar to NoRepairs, but counts the keyMembers for which a
+// repair was requested. This is useful in unit tests.
+func MockRepairs(repairCount *int32) RepairStrategy {
+	return func([]cluster.Cluster, instrumentation.RepairInstrumentation) coreRepairStrategy {
+		return func(kms []keyMember) {
+			atomic.AddInt32(repairCount, int32(len(kms)))
+		}
+	}
 }
-
-func (r *mockCoreRepairer) close() {}
 
 func TestSendOneReadOne(t *testing.T) {
 	clusters := newMockClusters(3)
-	farm := New(clusters, len(clusters), SendOneReadOne, MockRepairer, 0, nil, nil, nil)
-	farm.Insert([]common.KeyScoreMember{ksm})
+	repairs := int32(0)
+	farm := New(clusters, len(clusters), SendOneReadOne, MockRepairs(&repairs), nil)
+	farm.Insert([]common.KeyScoreMember{testingKeyScoreMember})
 
 	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
 	if err := checkResult(result, err); err != nil {
@@ -70,7 +71,7 @@ func TestSendOneReadOne(t *testing.T) {
 	if expected, got := 1, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 0, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
+	if expected, got := 0, int(atomic.LoadInt32(&repairs)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 	if totalOpenChannelCount(clusters) > 0 {
@@ -80,8 +81,9 @@ func TestSendOneReadOne(t *testing.T) {
 
 func TestSendAllReadAll(t *testing.T) {
 	clusters := newMockClusters(3)
-	farm := New(clusters, len(clusters), SendAllReadAll, MockRepairer, 0, nil, nil, nil)
-	farm.Insert([]common.KeyScoreMember{ksm})
+	repairs := int32(0)
+	farm := New(clusters, len(clusters), SendAllReadAll, MockRepairs(&repairs), nil)
+	farm.Insert([]common.KeyScoreMember{testingKeyScoreMember})
 
 	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
 	if err := checkResult(result, err); err != nil {
@@ -90,21 +92,22 @@ func TestSendAllReadAll(t *testing.T) {
 	if expected, got := 3, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 0, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
+	if expected, got := 0, int(atomic.LoadInt32(&repairs)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
 	// Now delete the ksm from one cluster and then read it again,
 	// triggering a repair.
-	clusters[0].Delete([]common.KeyScoreMember{ksm})
+	clusters[0].Delete([]common.KeyScoreMember{testingKeyScoreMember})
 	result, err = farm.Select([]string{"key", "nokey"}, 0, 10)
+	runtime.Gosched() // yield to the repairer
 	if err := checkResult(result, err); err != nil {
 		t.Error(err)
 	}
 	if expected, got := 6, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 1, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
+	if expected, got := 1, int(atomic.LoadInt32(&repairs)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -112,31 +115,41 @@ func TestSendAllReadAll(t *testing.T) {
 	// happen. Result should still be returned as normal.
 	clusters[0] = newFailingMockCluster()
 	result, err = farm.Select([]string{"key", "nokey"}, 0, 10)
+	runtime.Gosched()
 	if err := checkResult(result, err); err != nil {
 		t.Error(err)
 	}
 	if expected, got := 7, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 1, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
+	if expected, got := 1, int(atomic.LoadInt32(&repairs)); expected != got {
 		// Repair count still 1.
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
-	// Finally change the ksm in cluster 1 to one with a less
-	// recent timestamp. The more recent ksm should be returned,
-	// and a repair should be requested.
+	// Finally change the ksm in cluster 1 to one with a less recent
+	// timestamp. The more recent ksm should be returned, and a repair should
+	// be requested.
+	//
+	// We have to "clear" the data in the cluster first, because otherwise the
+	// insert will behave as a no-op, since its score is too low. That
+	// behavior is introduced since writing this test and is relied on for
+	// another test (the repair strategies). The best thing to do would be to
+	// make mockCluster behave exactly like a Redis ZSET, rather than playing
+	// games like this in our tests. TODO.
+	clusters[1].(*mockCluster).clear()
 	clusters[1].Insert([]common.KeyScoreMember{
 		common.KeyScoreMember{Key: "key", Score: 3.1, Member: "member"},
 	})
 	result, err = farm.Select([]string{"key", "nokey"}, 0, 10)
+	runtime.Gosched()
 	if err := checkResult(result, err); err != nil {
 		t.Error(err)
 	}
 	if expected, got := 10, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 2, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
+	if expected, got := 2, int(atomic.LoadInt32(&repairs)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 	if totalOpenChannelCount(clusters) > 0 {
@@ -146,8 +159,9 @@ func TestSendAllReadAll(t *testing.T) {
 
 func TestSendAllReadFirstLinger(t *testing.T) {
 	clusters := newMockClusters(3)
-	farm := New(clusters, len(clusters), SendAllReadFirstLinger, MockRepairer, 0, nil, nil, nil)
-	farm.Insert([]common.KeyScoreMember{ksm})
+	repairs := int32(0)
+	farm := New(clusters, len(clusters), SendAllReadFirstLinger, MockRepairs(&repairs), nil)
+	farm.Insert([]common.KeyScoreMember{testingKeyScoreMember})
 
 	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
 	// Sleep to give the "lingering" goroutine a chance to run.
@@ -158,7 +172,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	if expected, got := 3, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 0, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
+	if expected, got := 0, int(atomic.LoadInt32(&repairs)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -166,7 +180,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	// triggering a repair. We ignore the result as it will
 	// randomly come from cluster 0 or another one (that still has
 	// the ksm).
-	clusters[0].Delete([]common.KeyScoreMember{ksm})
+	clusters[0].Delete([]common.KeyScoreMember{testingKeyScoreMember})
 	_, err = farm.Select([]string{"key", "nokey"}, 0, 10)
 	if err != nil {
 		t.Error(err)
@@ -176,7 +190,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	if expected, got := 6, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 1, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
+	if expected, got := 1, int(atomic.LoadInt32(&repairs)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -195,13 +209,13 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	if expected, got := 1, len(result["key"]); expected != got {
 		t.Errorf("expected result length %v, got %v", expected, got)
 	}
-	if expected, got := ksm, result["key"][0]; expected != got {
+	if expected, got := testingKeyScoreMember, result["key"][0]; expected != got {
 		t.Errorf("expected ksm %v, got %v", expected, got)
 	}
 	if expected, got := 7, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 1, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
+	if expected, got := 1, int(atomic.LoadInt32(&repairs)); expected != got {
 		// Repair count still 1.
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
@@ -209,6 +223,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	// Finally change the ksm in cluster 1 to one with a less
 	// recent timestamp. A random ksm will be returned (so ignore
 	// it once more), and a repair should be requested.
+	clusters[1].(*mockCluster).clear()
 	clusters[1].Insert([]common.KeyScoreMember{
 		common.KeyScoreMember{Key: "key", Score: 3.1, Member: "member"},
 	})
@@ -221,7 +236,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	if expected, got := 10, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 2, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
+	if expected, got := 2, int(atomic.LoadInt32(&repairs)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -232,18 +247,15 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 
 func TestSendVarReadFirstLinger(t *testing.T) {
 	clusters := newMockClusters(3)
-	rp := NewRatePolice(time.Second, 10)
+	repairs := int32(0)
 	farm := New(
 		clusters,
 		len(clusters),
-		SendVarReadFirstLinger(2, time.Millisecond, rp),
-		MockRepairer,
-		0,
-		nil,
-		rp,
+		SendVarReadFirstLinger(2, time.Millisecond),
+		MockRepairs(&repairs),
 		nil,
 	)
-	farm.Insert([]common.KeyScoreMember{ksm})
+	farm.Insert([]common.KeyScoreMember{testingKeyScoreMember})
 
 	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
 	// Sleep to give the "lingering" goroutine a chance to run.
@@ -254,7 +266,7 @@ func TestSendVarReadFirstLinger(t *testing.T) {
 	if expected, got := 3, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 0, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
+	if expected, got := 0, int(atomic.LoadInt32(&repairs)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -268,7 +280,7 @@ func TestSendVarReadFirstLinger(t *testing.T) {
 	if expected, got := 4, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 0, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
+	if expected, got := 0, int(atomic.LoadInt32(&repairs)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 
@@ -289,7 +301,7 @@ func TestSendVarReadFirstLinger(t *testing.T) {
 	if expected, got := 3, totalSelectCount(clusters); expected != got {
 		t.Errorf("expected %d select calls, got %d", expected, got)
 	}
-	if expected, got := 0, int(atomic.LoadInt32(&farm.repairer.(*mockCoreRepairer).requestCount)); expected != got {
+	if expected, got := 0, int(atomic.LoadInt32(&repairs)); expected != got {
 		t.Errorf("expected %d repairs, got %d", expected, got)
 	}
 

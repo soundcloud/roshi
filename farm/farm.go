@@ -13,25 +13,16 @@ import (
 	"github.com/soundcloud/roshi/instrumentation"
 )
 
-const (
-	// MaxInt is what you think it is. Unfortunately not provided
-	// by the go math package.
-	MaxInt                 = int(^uint(0) >> 1)
-	maxKeysToWalkPerSelect = 1000
-)
-
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// Farm implements CRDT-enabled ZSET methods over many clusters.
+// Farm implements CRDT-semantic ZSET methods over many clusters.
 type Farm struct {
 	clusters        []cluster.Cluster
 	writeQuorum     int
 	readStrategy    coreReadStrategy
-	repairer        coreRepairer
-	walkCompleted   chan bool
-	ratePolice      RatePolice
+	repairStrategy  coreRepairStrategy
 	instrumentation instrumentation.Instrumentation
 }
 
@@ -42,51 +33,24 @@ type Farm struct {
 // receives an overall success. Reads are sent to clusters according to the
 // passed ReadStrategy.
 //
-// The repairer handles read-repairs (may be nil for no repairs).
-//
-// The walkerRate defines the max number of keys the data walker reads
-// per second. If 0, no data walk will happen.
-//
-// When the data walker finishes a walk of the whole farm, it will
-// send true to the walkCompleted channel (but only if it is ready to
-// receive at that moment). (Use nil if you don't want to receive
-// anything.)
-//
-// The RatePolice is used to limit the walk rate so that the sum of
-// keys read by the walker and keys read by actual queries does not
-// exceed the walkerRate. (rp can be nil, in which case no limits will
-// be imposed. Only do that with a walkerRate of 0.)
-//
-// Set instr to nil if you don't need instrumentation.
+// Instrumentation may be nil; all other parameters are required.
 func New(
 	clusters []cluster.Cluster,
 	writeQuorum int,
 	readStrategy ReadStrategy,
-	repairer Repairer,
-	walkerRate int,
-	walkCompleted chan bool,
-	rp RatePolice,
+	repairStrategy RepairStrategy,
 	instr instrumentation.Instrumentation,
 ) *Farm {
-	if rp == nil {
-		rp = NewNoPolice()
-	}
 	if instr == nil {
 		instr = instrumentation.NopInstrumentation{}
-	}
-	if repairer == nil {
-		repairer = NopRepairer
 	}
 	farm := &Farm{
 		clusters:        clusters,
 		writeQuorum:     writeQuorum,
-		walkCompleted:   walkCompleted,
-		ratePolice:      rp,
+		repairStrategy:  repairStrategy(clusters, instr),
 		instrumentation: instr,
 	}
 	farm.readStrategy = readStrategy(farm)
-	farm.repairer = repairer(farm)
-	farm.startWalker(walkerRate)
 	return farm
 }
 
@@ -112,7 +76,6 @@ func (f *Farm) Select(keys []string, offset, limit int) (map[string][]common.Key
 	if len(keys) <= 0 {
 		return map[string][]common.KeyScoreMember{}, nil
 	}
-	f.ratePolice.Report(len(keys))
 	return f.readStrategy(keys, offset, limit)
 }
 
@@ -126,84 +89,89 @@ func (f *Farm) Delete(tuples []common.KeyScoreMember) error {
 	)
 }
 
-func (f *Farm) startWalker(walkerRate int) {
-	if walkerRate == 0 {
+// Repair queries all clusters for the most recent score for the given
+// keyMember taking both, the deletes key and the inserts key, into
+// account. It then propagates that score and if it was connected to
+// the deletes or the inserts key to all clusters that are not up to
+// date already.
+func (f *Farm) Repair(km keyMember) {
+	go func() {
+		f.instrumentation.RepairCall()
+		f.instrumentation.RepairRequestCount(1)
+	}()
+
+	began := time.Now()
+	clustersUpToDate := map[int]bool{}
+	highestScore := 0.
+	var wasInserted bool // Whether the highest scoring keyMember was inserted or deleted.
+
+	// Scatter.
+	responsesChan := make(chan scoreResponseTuple, len(f.clusters))
+	for i, c := range f.clusters {
+		go func(i int, c cluster.Cluster) {
+			score, wasInserted, err := c.Score(km.Key, km.Member)
+			responsesChan <- scoreResponseTuple{i, score, wasInserted, err}
+		}(i, c)
+	}
+
+	// Gather.
+	for i := 0; i < cap(responsesChan); i++ {
+		resp := <-responsesChan
+		if resp.err != nil {
+			f.instrumentation.RepairCheckPartialFailure()
+			continue
+		}
+		if resp.score == highestScore && resp.wasInserted == wasInserted {
+			clustersUpToDate[resp.cluster] = true
+			continue
+		}
+		if resp.score > highestScore {
+			highestScore = resp.score
+			wasInserted = resp.wasInserted
+			clustersUpToDate = map[int]bool{}
+			clustersUpToDate[resp.cluster] = true
+		}
+		// Highly unlikely corner case: One cluster returns
+		// wasInserted=true, another wasInserted=false, but both
+		// return the same score. I that case, we will
+		// propagate the first result encountered. (And yes,
+		// this situation will screw us up elsewhere, too.)
+	}
+	go f.instrumentation.RepairCheckDuration(time.Now().Sub(began))
+
+	if highestScore == 0. {
+		// All errors (or keyMember not found). Do not proceed.
+		f.instrumentation.RepairCheckCompleteFailure()
 		return
 	}
-	clusterCompleted := make(chan int)
-
-	// Start one goroutine per cluster, each of which iterates
-	// endlessly through all the keys of that cluster.
-	for i := 0; i < len(f.clusters); i++ {
-		go func(i int) {
-			for {
-				keys := make([]string, 0, maxKeysToWalkPerSelect)
-				batchSize := 0
-				for key := range f.clusters[i].Keys() {
-					// Get a batch size if we have none.
-					for batchSize <= 0 {
-						batchSize = f.ratePolice.Request(walkerRate)
-						if batchSize <= 0 {
-							// Too much traffic. Wait for a sec and try again.
-							f.instrumentation.KeysThrottled()
-							time.Sleep(time.Second)
-						}
-					}
-					// Safeguard against excessive batchSize.
-					if batchSize > maxKeysToWalkPerSelect {
-						batchSize = maxKeysToWalkPerSelect
-					}
-					keys = append(keys, key)
-					if len(keys) >= batchSize {
-						// We are only interested in triggering the
-						// read repair, so we throw away the results
-						// and don't check for errors.
-						f.Select(keys, 0, MaxInt)
-						keys = keys[:0]
-						batchSize = 0
-					}
-				}
-				// Deal with the remaining odd ones...
-				if len(keys) > 0 {
-					f.Select(keys, 0, MaxInt)
-				}
-				// Report cluster completion.
-				clusterCompleted <- i
-				// Rest for a sec after cluster completion (only matters in case of
-				// empty or almost empty clusters to not spin too quickly).
-				time.Sleep(time.Second)
-			}
-		}(i)
+	if len(clustersUpToDate) == len(f.clusters) {
+		// Cool. All clusters agree already. Done.
+		f.instrumentation.RepairCheckRedundant()
+		return
 	}
-
-	// Collect completions of the clusters and report once the
-	// whole farm is complete. We do that once each cluster has
-	// reported completion at least once since we reported a farm
-	// completion the last time.
-	completedClusters := map[int]bool{}
-	go func() {
-		for i := range clusterCompleted {
-			if f.walkCompleted == nil {
-				// We are not asked for completion
-				// reports, so only loop here to drain
-				// the clusterCompleted chan.
-				continue
-			}
-			completedClusters[i] = true
-			if len(completedClusters) == len(f.clusters) {
-				f.instrumentation.KeysFarmCompleted()
-				select {
-				case f.walkCompleted <- true:
-					// Completion reported.
-				default:
-					// Do not block if
-					// f.walkCompleted is not
-					// ready to receive.
+	// We have a KeyScoreMember, and we have to propagate it to some clusters.
+	f.instrumentation.RepairWriteCount()
+	ksm := common.KeyScoreMember{Key: km.Key, Score: highestScore, Member: km.Member}
+	for i, c := range f.clusters {
+		if !clustersUpToDate[i] {
+			go func(c cluster.Cluster) {
+				defer func(began time.Time) {
+					f.instrumentation.RepairWriteDuration(time.Now().Sub(began))
+				}(time.Now())
+				var err error
+				if wasInserted {
+					err = c.Insert([]common.KeyScoreMember{ksm})
+				} else {
+					err = c.Delete([]common.KeyScoreMember{ksm})
 				}
-				completedClusters = map[int]bool{}
-			}
+				if err == nil {
+					f.instrumentation.RepairWriteSuccess()
+				} else {
+					f.instrumentation.RepairWriteFailure()
+				}
+			}(c)
 		}
-	}()
+	}
 }
 
 func (f *Farm) write(
@@ -381,3 +349,10 @@ func (i deleteInstrumentation) recordCount(n int)              { i.DeleteRecordC
 func (i deleteInstrumentation) callDuration(d time.Duration)   { i.DeleteCallDuration(d) }
 func (i deleteInstrumentation) recordDuration(d time.Duration) { i.DeleteRecordDuration(d) }
 func (i deleteInstrumentation) quorumFailure()                 { i.DeleteQuorumFailure() }
+
+type scoreResponseTuple struct {
+	cluster     int
+	score       float64
+	wasInserted bool // false = this keyMember was deleted
+	err         error
+}
