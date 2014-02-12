@@ -301,9 +301,7 @@ Go installed on your computer to build Roshi. If you're on a Mac and use
 
     go test ./...
 
-# I just want to run the HTTP service!
+# Running
 
-See the appropriate sections of the [roshi-server README][build-run].
-
-[build-run]: https://github.com/soundcloud/roshi/blob/master/roshi-server#getting-and-building
-
+See [roshi-server][roshi-server] and [roshi-walker][roshi-walker] for
+information about owning and operating your own Roshi.
