@@ -99,6 +99,7 @@ func main() {
 	default:
 		log.Fatalf("unknown repair strategy '%s'", *farmRepairStrategy)
 	}
+	log.Printf("using %s repair strategy", *farmRepairStrategy)
 
 	// Parse hash function.
 	var hashFunc func(string) uint32
