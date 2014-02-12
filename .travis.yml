@@ -8,7 +8,7 @@ services:
     - redis-server
 
 env:
-    - TEST_REDIS_ADDRESSES=localhost:6379 TEST_REDIS_WAIT_DURATION=200ms
+    - TEST_REDIS_ADDRESSES=localhost:6379 TEST_REDIS_WAIT_DURATION=5s
 
 before_script:
     - sh -c "sleep 5"  # give Redis a chance to start
