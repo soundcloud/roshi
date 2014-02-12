@@ -128,7 +128,7 @@ func (i statsdInstrumentation) RepairCall() {
 	i.statter.Counter(i.sampleRate, i.prefix+"repair.call.count", 1)
 }
 
-func (i statsdInstrumentation) RepairRequestCount(n int) {
+func (i statsdInstrumentation) RepairRequest(n int) {
 	i.statter.Counter(i.sampleRate, i.prefix+"repair.request.count", n)
 }
 
@@ -136,36 +136,12 @@ func (i statsdInstrumentation) RepairDiscarded(n int) {
 	i.statter.Counter(i.sampleRate, i.prefix+"repair.discarded.count", n)
 }
 
-func (i statsdInstrumentation) RepairCheckPartialFailure() {
-	i.statter.Counter(i.sampleRate, i.prefix+"repair.check.partial_failure.count", 1)
+func (i statsdInstrumentation) RepairWriteSuccess(n int) {
+	i.statter.Counter(i.sampleRate, i.prefix+"repair.write.success.count", n)
 }
 
-func (i statsdInstrumentation) RepairCheckCompleteFailure() {
-	i.statter.Counter(i.sampleRate, i.prefix+"repair.check.complete_failure.count", 1)
-}
-
-func (i statsdInstrumentation) RepairCheckDuration(d time.Duration) {
-	i.statter.Timing(i.sampleRate, i.prefix+"repair.check.duration", d)
-}
-
-func (i statsdInstrumentation) RepairCheckRedundant() {
-	i.statter.Counter(i.sampleRate, i.prefix+"repair.check.redundant.count", 1)
-}
-
-func (i statsdInstrumentation) RepairWriteCount() {
-	i.statter.Counter(i.sampleRate, i.prefix+"repair.write.count", 1)
-}
-
-func (i statsdInstrumentation) RepairWriteSuccess() {
-	i.statter.Counter(i.sampleRate, i.prefix+"repair.write.success.count", 1)
-}
-
-func (i statsdInstrumentation) RepairWriteFailure() {
-	i.statter.Counter(i.sampleRate, i.prefix+"repair.write.failure.count", 1)
-}
-
-func (i statsdInstrumentation) RepairWriteDuration(d time.Duration) {
-	i.statter.Timing(i.sampleRate, i.prefix+"repair.write.duration", d)
+func (i statsdInstrumentation) RepairWriteFailure(n int) {
+	i.statter.Counter(i.sampleRate, i.prefix+"repair.write.failure.count", n)
 }
 
 func (i statsdInstrumentation) WalkKeys(n int) {

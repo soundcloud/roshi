@@ -58,17 +58,11 @@ type KeysInstrumentation interface {
 
 // RepairInstrumentation describes metrics for Repairs.
 type RepairInstrumentation interface {
-	RepairCall()                       // called for every invocation of requestRepair
-	RepairRequestCount(int)            // +N, where N is the total number of keyMembers for which repair was requested
-	RepairDiscarded(int)               // +N, where N is the total number of keyMembers for which the repair request was discarded by the Repairer
-	RepairCheckPartialFailure()        // called when a single cluster returns a read error during a check
-	RepairCheckCompleteFailure()       // called when no cluster returned any data during a check (hence no repair could be performed)
-	RepairCheckDuration(time.Duration) // time spent checking
-	RepairCheckRedundant()             // called when a repair was requested but the check revealed that no action is required
-	RepairWriteCount()                 // called when the check revealed that a repair is required (i.e. a KeyScoreMember has to be written)
-	RepairWriteSuccess()               // called (separately per cluster) after a KeyScoreMember was successfully written
-	RepairWriteFailure()               // called (separately per cluster) after writing a KeyScoreMember failed
-	RepairWriteDuration(time.Duration) // time spent (per cluster) writing the KeyScoreMember
+	RepairCall()            // called for every requested repair
+	RepairRequest(int)      // +N, where N is the total number of keyMembers for which repair was requested
+	RepairDiscarded(int)    // +N, where N is keyMembers requested to repair but discarded due to e.g. rate limits
+	RepairWriteSuccess(int) // +N, where N is keyMembers successfully written to a cluster as a result of a repair
+	RepairWriteFailure(int) // +N, where N is keyMembers unsuccessfully written to a cluster as a result of a repair
 }
 
 // WalkInstrumentation describes metrics for walkers.
@@ -160,35 +154,17 @@ func (i NopInstrumentation) KeysClusterCompleted() {}
 // RepairCall satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairCall() {}
 
-// RepairRequestCount satisfies the Instrumentation interface but does no work.
-func (i NopInstrumentation) RepairRequestCount(int) {}
+// RepairRequest satisfies the Instrumentation interface but does no work.
+func (i NopInstrumentation) RepairRequest(int) {}
 
 // RepairDiscarded satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) RepairDiscarded(int) {}
 
-// RepairCheckPartialFailure satisfies the Instrumentation interface but does no work.
-func (i NopInstrumentation) RepairCheckPartialFailure() {}
-
-// RepairCheckCompleteFailure satisfies the Instrumentation interface but does no work.
-func (i NopInstrumentation) RepairCheckCompleteFailure() {}
-
-// RepairCheckDuration satisfies the Instrumentation interface but does no work.
-func (i NopInstrumentation) RepairCheckDuration(time.Duration) {}
-
-// RepairCheckRedundant satisfies the Instrumentation interface but does no work.
-func (i NopInstrumentation) RepairCheckRedundant() {}
-
-// RepairWriteCount satisfies the Instrumentation interface but does no work.
-func (i NopInstrumentation) RepairWriteCount() {}
-
 // RepairWriteSuccess satisfies the Instrumentation interface but does no work.
-func (i NopInstrumentation) RepairWriteSuccess() {}
+func (i NopInstrumentation) RepairWriteSuccess(int) {}
 
 // RepairWriteFailure satisfies the Instrumentation interface but does no work.
-func (i NopInstrumentation) RepairWriteFailure() {}
-
-// RepairWriteDuration satisfies the Instrumentation interface but does no work.
-func (i NopInstrumentation) RepairWriteDuration(time.Duration) {}
+func (i NopInstrumentation) RepairWriteFailure(int) {}
 
 // WalkKeys satisfies the Instrumentation interface but does no work.
 func (i NopInstrumentation) WalkKeys(int) {}

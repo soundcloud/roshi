@@ -28,6 +28,11 @@ type keyMember struct {
 // to cap the load to your clusters.
 func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrumentation) coreRepairStrategy {
 	return func(kms []keyMember) {
+		go func() {
+			instr.RepairCall()
+			instr.RepairRequest(len(kms))
+		}()
+
 		type scoreTuple struct {
 			score       float64
 			wasInserted bool
@@ -103,7 +108,11 @@ func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrume
 		var wg sync.WaitGroup
 		wg.Add(len(inserts) + len(deletes))
 		do := func(write func([]common.KeyScoreMember) error, tuples []common.KeyScoreMember) {
-			write(tuples)
+			if err := write(tuples); err == nil {
+				go instr.RepairWriteSuccess(len(tuples))
+			} else {
+				go instr.RepairWriteFailure(len(tuples))
+			}
 			wg.Done()
 		}
 

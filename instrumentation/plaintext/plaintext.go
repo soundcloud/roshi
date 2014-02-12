@@ -120,7 +120,7 @@ func (i plaintextInstrumentation) RepairCall() {
 	fmt.Fprintf(i, "repair.call.count 1")
 }
 
-func (i plaintextInstrumentation) RepairRequestCount(n int) {
+func (i plaintextInstrumentation) RepairRequest(n int) {
 	fmt.Fprintf(i, "repair.request.count %d", n)
 }
 
@@ -128,36 +128,12 @@ func (i plaintextInstrumentation) RepairDiscarded(n int) {
 	fmt.Fprintf(i, "repair.discarded.count %d", n)
 }
 
-func (i plaintextInstrumentation) RepairCheckPartialFailure() {
-	fmt.Fprintf(i, "repair.check.partial_failure.count 1")
+func (i plaintextInstrumentation) RepairWriteSuccess(n int) {
+	fmt.Fprintf(i, "repair.write.success.count %d", n)
 }
 
-func (i plaintextInstrumentation) RepairCheckCompleteFailure() {
-	fmt.Fprintf(i, "repair.check.complete_failure.count 1")
-}
-
-func (i plaintextInstrumentation) RepairCheckDuration(d time.Duration) {
-	fmt.Fprintf(i, "repair.check.duration_ms %d", d.Nanoseconds()/1e6)
-}
-
-func (i plaintextInstrumentation) RepairCheckRedundant() {
-	fmt.Fprintf(i, "repair.check.redundant.count 1")
-}
-
-func (i plaintextInstrumentation) RepairWriteCount() {
-	fmt.Fprintf(i, "repair.write.count 1")
-}
-
-func (i plaintextInstrumentation) RepairWriteSuccess() {
-	fmt.Fprintf(i, "repair.write.success.count 1")
-}
-
-func (i plaintextInstrumentation) RepairWriteFailure() {
-	fmt.Fprintf(i, "repair.write.failure.count 1")
-}
-
-func (i plaintextInstrumentation) RepairWriteDuration(d time.Duration) {
-	fmt.Fprintf(i, "repair.write.duration_ms %d", d.Nanoseconds()/1e6)
+func (i plaintextInstrumentation) RepairWriteFailure(n int) {
+	fmt.Fprintf(i, "repair.write.failure.count %d", n)
 }
 
 func (i plaintextInstrumentation) WalkKeys(n int) {
