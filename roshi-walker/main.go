@@ -28,6 +28,7 @@ func main() {
 		maxSize             = flag.Int("max.size", 10000, "Maximum number of events per key")
 		batchSize           = flag.Int("batch.size", 100, "keys to select per request")
 		maxKeysPerSecond    = flag.Int64("max.keys.per.second", 1000, "max keys per second to walk")
+		scanLogInterval     = flag.Duration("scan.log.interval", 5*time.Second, "how often to report scan rates in log")
 		once                = flag.Bool("once", false, "walk entire keyspace once and exit (default false, walk forever)")
 		statsdAddress       = flag.String("statsd.address", "", "Statsd address (blank to disable)")
 		statsdSampleRate    = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
@@ -83,7 +84,7 @@ func main() {
 	// Perform the walk.
 	dst := farm.New(clusters, len(clusters), farm.SendAllReadAll, farm.AllRepairs, instr)
 	for {
-		src := scan(clusters) // new key set
+		src := scan(clusters, *scanLogInterval) // new key set
 		walkOnce(dst, throttle, src, *batchSize, *maxSize, instr)
 		if *once {
 			return
@@ -123,14 +124,32 @@ func makeClusters(
 	return clusters, nil
 }
 
-func scan(clusters []cluster.Cluster) <-chan string {
+func scan(clusters []cluster.Cluster, logInterval time.Duration) <-chan string {
 	c := make(chan string)
 	go func() {
 		defer close(c)
-		order := rand.Perm(len(clusters))
-		for _, index := range order {
+		tick := time.Tick(logInterval)
+		for i, index := range rand.Perm(len(clusters)) {
+			begin, mark := time.Now(), time.Now()
+			sent, last := 0, 0
+			log.Printf("scan: %d/%d, cluster index %d: begin", i+1, len(clusters), index)
 			for key := range clusters[index].Keys() {
-				c <- key
+				select {
+				case c <- key:
+					sent++
+				case <-tick:
+					delta := time.Since(mark)
+					mark = time.Now()
+					log.Printf(
+						"scan: %d/%d, cluster index %d: sent %d, %.2f/sec instantaneous, %.2f/sec overall",
+						i+1, len(clusters),
+						index,
+						sent,
+						float64(sent-last)/delta.Seconds(),
+						float64(sent)/time.Since(begin).Seconds(),
+					)
+					last = sent
+				}
 			}
 		}
 	}()
