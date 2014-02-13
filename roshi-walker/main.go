@@ -17,6 +17,10 @@ import (
 	"github.com/tsenart/tb"
 )
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 func main() {
 	var (
 		redisInstances      = flag.String("redis.instances", "", "Semicolon-separated list of comma-separated lists of Redis instances")
