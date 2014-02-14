@@ -196,9 +196,9 @@ func (c *mockCluster) Score(key, member string) (float64, bool, error) {
 	return 0, false, fmt.Errorf("no member '%s' found for key '%s'", member, key)
 }
 
-func (c *mockCluster) Keys() <-chan string {
+func (c *mockCluster) Keys(batchSize int) <-chan []string {
 	atomic.AddInt32(&c.countKeys, 1)
-	ch := make(chan string)
+	ch := make(chan []string)
 	m := map[string]common.KeyScoreMembers{}
 	// Copy c.m so that at least after this method has returned,
 	// we don't run into issues with concurrent modifications.
@@ -207,8 +207,16 @@ func (c *mockCluster) Keys() <-chan string {
 	}
 	go func() {
 		defer close(ch)
+		batch := []string{}
 		for key := range m {
-			ch <- key
+			batch = append(batch, key)
+			if len(batch) >= batchSize {
+				ch <- batch
+				batch = []string{}
+			}
+		}
+		if len(batch) > 0 {
+			ch <- batch
 		}
 	}()
 	return ch
