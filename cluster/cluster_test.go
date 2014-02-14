@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/garyburd/redigo/redis"
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/shard"
-	"github.com/garyburd/redigo/redis"
 )
 
 func TestInsertSelectKeys(t *testing.T) {
@@ -124,10 +124,12 @@ func TestInsertSelectKeys(t *testing.T) {
 		}
 		t.Logf("%s: %v OK", key, expected)
 	}
-	keysChannel := c.Keys()
+	keysChannel := c.Keys(1)
 	keys := map[string]bool{}
-	for key := range keysChannel {
-		keys[key] = true
+	for batch := range keysChannel {
+		for _, key := range batch {
+			keys[key] = true
+		}
 	}
 	if got, expected := keys, map[string]bool{"foo": true, "bar": true, "baz": true}; !reflect.DeepEqual(got, expected) {
 		t.Errorf("Expected key set %+v, got %+v", expected, got)

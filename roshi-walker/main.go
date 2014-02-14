@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
+	_ "net/http/pprof"
 	"strings"
 	"time"
 
@@ -88,8 +90,8 @@ func main() {
 	// Perform the walk.
 	dst := farm.New(clusters, len(clusters), farm.SendAllReadAll, farm.AllRepairs, instr)
 	for {
-		src := scan(clusters, *scanLogInterval) // new key set
-		walkOnce(dst, throttle, src, *batchSize, *maxSize, instr)
+		src := scan(clusters, *batchSize, *scanLogInterval) // new key set
+		walkOnce(dst, throttle, src, *maxSize, instr)
 		if *once {
 			return
 		}
@@ -128,31 +130,36 @@ func makeClusters(
 	return clusters, nil
 }
 
-func scan(clusters []cluster.Cluster, logInterval time.Duration) <-chan string {
-	c := make(chan string)
+func scan(clusters []cluster.Cluster, batchSize int, logInterval time.Duration) <-chan []string {
+	c := make(chan []string)
 	go func() {
 		defer close(c)
-		tick := time.Tick(logInterval)
+		logTick := time.Tick(logInterval)
+		batches, keys, prev, mark := 0, 0, 0, time.Now()
+
 		for i, index := range rand.Perm(len(clusters)) {
-			begin, mark := time.Now(), time.Now()
-			sent, last := 0, 0
 			log.Printf("scan: %d/%d, cluster index %d: begin", i+1, len(clusters), index)
-			for key := range clusters[index].Keys() {
+			for batch := range clusters[index].Keys(batchSize) {
 				select {
-				case c <- key:
-					sent++
-				case <-tick:
-					delta := time.Since(mark)
-					mark = time.Now()
+				case c <- batch:
+					//log.Printf(
+					//	"scan: %d/%d, cluster index %d: forwarded batch of %d",
+					//	i+1, len(clusters), index,
+					//	len(batch),
+					//)
+					batches += 1
+					keys += len(batch)
+
+				case <-logTick:
 					log.Printf(
-						"scan: %d/%d, cluster index %d: sent %d, %.2f/sec instantaneous, %.2f/sec overall",
-						i+1, len(clusters),
-						index,
-						sent,
-						float64(sent-last)/delta.Seconds(),
-						float64(sent)/time.Since(begin).Seconds(),
+						"scan: %d/%d, cluster index %d: %d batches, %d keys, %.2f keys/sec",
+						i+1, len(clusters), index,
+						batches,
+						keys,
+						float64(keys-prev)/(time.Since(mark).Seconds()),
 					)
-					last = sent
+					prev = keys
+					mark = time.Now()
 				}
 			}
 		}
@@ -163,24 +170,15 @@ func scan(clusters []cluster.Cluster, logInterval time.Duration) <-chan string {
 func walkOnce(
 	dst farm.Selecter,
 	throttle *throttle,
-	src <-chan string,
-	batchSize, maxSize int,
+	src <-chan []string,
+	maxSize int,
 	instr instrumentation.WalkInstrumentation,
 ) {
-	batch := []string{}
-	waitSelectReset := func() {
+	for batch := range src {
 		throttle.wait(int64(len(batch)))
 		dst.Select(batch, 0, maxSize)
 		instr.WalkKeys(len(batch))
-		batch = []string{}
 	}
-	for key := range src {
-		batch = append(batch, key)
-		if len(batch) >= batchSize {
-			waitSelectReset()
-		}
-	}
-	waitSelectReset()
 }
 
 type throttle struct {

@@ -109,18 +109,6 @@ func (i plaintextInstrumentation) DeleteQuorumFailure() {
 	fmt.Fprintf(i, "delete.quorum_failure.count 1")
 }
 
-func (i plaintextInstrumentation) KeysFailure() {
-	fmt.Fprintf(i, "keys.failure.count 1")
-}
-
-func (i plaintextInstrumentation) KeysInstanceCompleted() {
-	fmt.Fprintf(i, "keys.instance_completed.count 1")
-}
-
-func (i plaintextInstrumentation) KeysClusterCompleted() {
-	fmt.Fprintf(i, "keys.cluster_completed.count 1")
-}
-
 func (i plaintextInstrumentation) RepairCall() {
 	fmt.Fprintf(i, "repair.call.count 1")
 }

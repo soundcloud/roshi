@@ -67,7 +67,7 @@ type Scorer interface {
 // Redis SCAN command. Note that keys for which only deletes have
 // happened (and no inserts) will not be emitted.
 type Scanner interface {
-	Keys() <-chan string
+	Keys(batchSize int) <-chan []string
 }
 
 const (
@@ -270,49 +270,58 @@ func (c *cluster) Score(key, member string) (float64, bool, error) {
 }
 
 // Keys implements the Scanner interface.
-func (c *cluster) Keys() <-chan string {
-	ch := make(chan string)
+func (c *cluster) Keys(batchSize int) <-chan []string {
+	ch := make(chan []string)
 	go func() {
 		defer close(ch)
-		for _, index := range rand.Perm(c.shards.Size()) {
+		for i, index := range rand.Perm(c.shards.Size()) {
+			log.Printf("cluster: Keys: scanning shard %d/%d, index %d (batch size %d)", i+1, c.shards.Size(), index, batchSize)
 			cursor := 0
+			batch := make([]string, 0, batchSize)
 			for {
 				if err := c.shards.WithIndex(index, func(conn redis.Conn) error {
-					values, err := redis.Values(conn.Do("SCAN", cursor))
+					values, err := redis.Values(conn.Do("SCAN", cursor, "COUNT", fmt.Sprint(batchSize)))
 					if err != nil {
 						return err
 					}
+
 					if n := len(values); n != 2 {
 						return fmt.Errorf("received %d values from Redis, expected exactly 2", n)
 					}
+
 					if cursor, err = redis.Int(values[0], nil); err != nil {
 						return err
 					}
+
 					keys, err := redis.Strings(values[1], nil)
 					if err != nil {
 						return err
 					}
+
 					for _, key := range keys {
 						// Only emit keys with insertSuffix - but strip the suffix.
 						l := len(key) - len(insertSuffix)
 						if key[l:] == insertSuffix {
-							ch <- key[:l]
+							batch = append(batch, key[:l])
+							if len(batch) >= batchSize {
+								ch <- batch
+								batch = make([]string, 0, batchSize)
+							}
 						}
 					}
 					return nil
 				}); err != nil {
 					log.Printf("cluster: during Keys on instance %d: %s", index, err)
-					c.instrumentation.KeysFailure()
 					break // Skip failed instance.
 				}
 				if cursor == 0 {
 					break // Back at cursor 0, this instance is done.
 				}
 			}
-			c.instrumentation.KeysInstanceCompleted()
-
+			if len(batch) > 0 {
+				ch <- batch
+			}
 		}
-		c.instrumentation.KeysClusterCompleted()
 	}()
 	return ch
 }
