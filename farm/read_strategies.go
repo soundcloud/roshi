@@ -157,27 +157,16 @@ func SendAllReadFirstLinger(farm *Farm) coreReadStrategy {
 
 // SendVarReadFirstLinger is a refined version of SendAllReadFirstLinger. It
 // works in the same way but reduces the requests to all clusters under
-// certain circumstances.  If you pass in a RatePolice, it will request
-// permission from it with thresholdKeysReadPerSec as targe rate. Obviously,
-// you should use the same RatePolice as the one the farm is reporting its
-// reads to. If the RatePolice determines that the target rate is already
-// reached, this read strategy will not perform a "SendAll" style read but a
-// "SendOne" style.  "SendOne" has two issues, though: First, no repairs will
-// ever result from a "SendOne" read. Second, if the one cluster the read
-// request is sent to is unable (or slow) to reply, the whole read will fail
-// (or be delayed). The first issue is implicitly solved by
-// SendVarReadFirstLinger because the baseline amount of "SendAll" reads
-// effectively provides a probabilistic repair scheme. To solve the second
-// issue, SendVarReadFirstLinger promotes any "SendOne" read to a "SendAll"
-// read if it was unsuccessful to return any results within a time set by
-// thresholdLatency.
+// certain circumstances. If maxKeysPerSecond is exceeded by this read
+// strategy, it will stop performing SendAll and revert to SendOne. SendOne
+// has two issues: no repairs will ever be made, and if the chosen cluster is
+// slow or unusable, the read will be delayed or fail. The first issue can be
+// ignored, because the baseline SendAll reads provide a basis for repairs. To
+// solve the second issue, we promote any SendOne to a SendAll if  no results
+// are returned by thresholdLatency.
 //
-// To never do an initial "SendAll", set thresholdKeysReadPerSec to 0 (in
-// which case only the promotion to "SendAll" after thresholdLatency has
-// passed will ever create "SendAll" reads - and only those can trigger
-// repairs!).  For unlimited thresholdKeysReadPerSec, set it to a negative
-// number. To never promote "SendOne" to "SendAll", set thresholdLatency to a
-// negative duration.
+// To never perform an initial SendAll, set maxKeysPerSecond to 0. To always
+// perform an initial SendAll, set maxKeysPerSecond to a negative value.
 func SendVarReadFirstLinger(maxKeysPerSecond int, thresholdLatency time.Duration) func(*Farm) coreReadStrategy {
 	permits := permitter(allowAllPermitter{})
 	if maxKeysPerSecond >= 0 {
