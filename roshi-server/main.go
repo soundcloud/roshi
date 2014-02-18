@@ -28,11 +28,6 @@ import (
 	"github.com/streadway/handy/breaker"
 )
 
-const (
-	ratePoliceMovingAverageDuration = 5 * time.Second
-	ratePoliceNumberOfBuckets       = 20
-)
-
 var (
 	stats = g2s.Noop()
 	log   = logpkg.New(os.Stdout, "", logpkg.Lmicroseconds)
