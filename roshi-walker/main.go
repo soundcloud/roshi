@@ -86,7 +86,7 @@ func main() {
 	}
 
 	// HTTP server for profiling
-	go log.Print(http.ListenAndServe(*httpAddress, nil))
+	go func() { log.Print(http.ListenAndServe(*httpAddress, nil)) }()
 
 	// Set up our rate limiter. Remember: it's per-key, not per-request.
 	throttle := newThrottle(*maxKeysPerSecond)
