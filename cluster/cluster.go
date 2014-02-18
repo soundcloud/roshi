@@ -261,10 +261,9 @@ func (c *cluster) Delete(tuples []common.KeyScoreMember) error {
 func (c *cluster) Score(key, member string) (float64, bool, error) {
 	var score float64
 	var inserted bool
-	err := c.shards.With(key, func(conn redis.Conn) error {
-		var err error
+	err := c.shards.With(key, func(conn redis.Conn) (err error) {
 		score, inserted, err = pipelineScore(conn, key, member)
-		return err
+		return
 	})
 	return score, inserted, err
 }
