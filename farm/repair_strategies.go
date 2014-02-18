@@ -81,6 +81,10 @@ func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrume
 			// Walk once, to determine the correct data.
 			highestScore, wasInserted := 0., false
 			for _, scoreTuple := range scoreTuples {
+				if scoreTuple.err != nil {
+					// Don't consider error responses.
+					continue
+				}
 				if scoreTuple.score > highestScore {
 					highestScore = scoreTuple.score
 					wasInserted = scoreTuple.wasInserted
@@ -95,7 +99,13 @@ func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrume
 
 			// Walk again, to schedule any necessary repairs.
 			for clusterIndex, scoreTuple := range scoreTuples {
-				if scoreTuple.score < highestScore || scoreTuple.wasInserted != wasInserted {
+				// Schedule a repair if the cluster returned an error, if it's
+				// storing a lower score, or if its inserted-vs-deleted
+				// boolean is not what it should be.
+				gotError := scoreTuple.err != nil
+				lowScore := scoreTuple.score < highestScore
+				badWrite := scoreTuple.wasInserted != wasInserted
+				if gotError || lowScore || badWrite {
 					target[clusterIndex] = append(target[clusterIndex], common.KeyScoreMember{
 						Key:    km.Key,
 						Score:  highestScore,
