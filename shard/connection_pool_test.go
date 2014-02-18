@@ -18,7 +18,7 @@ func TestMemoryRegression(t *testing.T) {
 		var (
 			m        runtime.MemStats
 			biggest  uint64
-			smallest uint64 = math.MaxUint64
+			smallest = uint64(math.MaxUint64)
 		)
 		for {
 			select {
