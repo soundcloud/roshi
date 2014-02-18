@@ -2,7 +2,6 @@ package shard
 
 import (
 	"errors"
-	"log"
 	"sync"
 	"time"
 
@@ -48,7 +47,6 @@ func newConnectionPool(
 }
 
 func (p *connectionPool) get() (redis.Conn, error) {
-	deadline := time.Now().Add(p.connect) // overloading `connect` a bit
 	p.mu.Lock()
 	for {
 		available := len(p.available)
@@ -69,7 +67,7 @@ func (p *connectionPool) get() (redis.Conn, error) {
 			// if it is nil. put() must handle that circumstance.
 			p.outstanding++
 			p.mu.Unlock()
-			return dial(p.address, p.connect, p.read, p.write, deadline)
+			return redis.DialTimeout("tcp", p.address, p.connect, p.read, p.write)
 
 		case available > 0:
 			// Best case. We can directly use an available connection.
@@ -117,25 +115,4 @@ func (p *connectionPool) closeAll() error {
 	}
 	p.available = []redis.Conn{}
 	return nil
-}
-
-func dial(address string, connect, read, write time.Duration, deadline time.Time) (redis.Conn, error) {
-	backoff := 10 * time.Millisecond
-	for {
-		if time.Now().After(deadline) {
-			return nil, errDialDeadline
-		}
-
-		conn, err := redis.DialTimeout("tcp", address, connect, read, write)
-		if err != nil {
-			log.Printf("cluster: dial %s: %s", address, err)
-			backoff *= 2
-			if backoff > 1*time.Second {
-				backoff = 1 * time.Second
-			}
-			time.Sleep(backoff)
-			continue
-		}
-		return conn, nil
-	}
 }

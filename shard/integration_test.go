@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/soundcloud/roshi/shard"
 	"github.com/garyburd/redigo/redis"
+	"github.com/soundcloud/roshi/shard"
 )
 
 func TestRecovery(t *testing.T) {
@@ -28,6 +28,11 @@ func TestRecovery(t *testing.T) {
 		shard.Murmur3,
 	)
 
+	waitDuration, err := time.ParseDuration(os.Getenv("TEST_REDIS_WAIT_DURATION"))
+	if err != nil {
+		waitDuration = 100 * time.Millisecond
+	}
+
 	func() {
 		// Start Redis
 		cmd := exec.Command(absBinary, "--port", port)
@@ -35,10 +40,6 @@ func TestRecovery(t *testing.T) {
 			t.Fatalf("Starting %s: %s", binary, err)
 		}
 		defer cmd.Process.Kill()
-		waitDuration, err := time.ParseDuration(os.Getenv("TEST_REDIS_WAIT_DURATION"))
-		if err != nil {
-			waitDuration = 10 * time.Millisecond
-		}
 		time.Sleep(waitDuration)
 
 		// Try initial PING
@@ -81,7 +82,7 @@ func TestRecovery(t *testing.T) {
 			t.Fatalf("Starting %s: %s", binary, err)
 		}
 		defer cmd.Process.Kill()
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(waitDuration)
 
 		// Try second PING x1
 		err := s.With("irrelevant", func(conn redis.Conn) error {
