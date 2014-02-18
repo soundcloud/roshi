@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
+	_ "net/http/pprof"
 	"strings"
 	"time"
 
@@ -37,6 +39,7 @@ func main() {
 		statsdAddress       = flag.String("statsd.address", "", "Statsd address (blank to disable)")
 		statsdSampleRate    = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
 		statsdBucketPrefix  = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
+		httpAddress         = flag.String("http.address", ":6060", "HTTP listen address (profiling endpoints only)")
 	)
 	flag.Parse()
 
@@ -81,6 +84,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// HTTP server for profiling
+	go log.Print(http.ListenAndServe(*httpAddress, nil))
 
 	// Set up our rate limiter. Remember: it's per-key, not per-request.
 	throttle := newThrottle(*maxKeysPerSecond)
