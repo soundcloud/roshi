@@ -1,14 +1,11 @@
 package shard
 
 import (
-	"errors"
 	"sync"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
 )
-
-var errDialDeadline = errors.New("couldn't successfully dial an instance")
 
 type connectionPool struct {
 	mu *sync.Mutex
