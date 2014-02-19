@@ -1,6 +1,7 @@
 package farm
 
 import (
+	"fmt"
 	"reflect"
 	"runtime"
 	"testing"
@@ -86,4 +87,41 @@ func TestRateLimitedRepairs(t *testing.T) {
 			t.Errorf("post-repair: cluster %d: expected %+v, got %+v", i, expected, got.KeyScoreMembers)
 		}
 	}
+}
+
+func TestExplodingGoroutines(t *testing.T) {
+	// Make a farm.
+	n := 5
+	clusters := newMockClusters(n)
+	farm := New(clusters, (n/2)+1, SendAllReadAll, AllRepairs, nil)
+
+	// Insert a big key into every cluster except the first.
+	key := "foo"
+	maxSize := 2000
+	tuples := makeBigKey(key, maxSize)
+	for i := 1; i < n; i++ {
+		clusters[i].Insert(tuples)
+	}
+
+	// Issue repair by making a Select.
+	before := runtime.NumGoroutine()
+	farm.Select([]string{key}, 0, maxSize)
+	runtime.Gosched()
+	after := runtime.NumGoroutine()
+
+	if delta := after - before; delta > 5 {
+		t.Errorf("The repair-enabled Select created %d goroutines. That's too many.", delta)
+	}
+}
+
+func makeBigKey(key string, n int) []common.KeyScoreMember {
+	tuples := make([]common.KeyScoreMember, n)
+	for i := 0; i < n; i++ {
+		tuples[i] = common.KeyScoreMember{
+			Key:    key,
+			Score:  float64(i),
+			Member: fmt.Sprint(i),
+		}
+	}
+	return tuples
 }

@@ -45,28 +45,20 @@ func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrume
 			scoreTuple
 		}
 
-		responses := make(chan responseTuple, len(kms)*len(clusters))
-
-		// Scatter Score requests.
+		// Make Score requests. Do this sequentially, as if a key is totally
+		// missing from a cluster (which is the case when a node needs to be
+		// rebuilt) you'll end up making maxSize simultaneous Score requests,
+		// in unique goroutines, which is costly :) The alternative is to make
+		// Score take a slice of key-members.
+		responses := map[keyMember][]scoreTuple{}
 		for _, km := range kms {
 			for i, c := range clusters {
-				go func(km keyMember, i int, c cluster.Cluster) {
-					score, wasInserted, err := c.Score(km.Key, km.Member)
-					t := scoreTuple{score: score, wasInserted: wasInserted, err: err}
-					responses <- responseTuple{clusterIndex: i, keyMember: km, scoreTuple: t}
-				}(km, i, c)
+				score, wasInserted, err := c.Score(km.Key, km.Member)
+				if _, ok := responses[km]; !ok {
+					responses[km] = make([]scoreTuple, len(clusters))
+				}
+				responses[km][i] = scoreTuple{score, wasInserted, err}
 			}
-		}
-
-		gathered := map[keyMember][]scoreTuple{}
-
-		// Gather Score responses.
-		for i := 0; i < cap(responses); i++ {
-			resp := <-responses
-			if _, ok := gathered[resp.keyMember]; !ok {
-				gathered[resp.keyMember] = make([]scoreTuple, len(clusters))
-			}
-			gathered[resp.keyMember][resp.clusterIndex] = resp.scoreTuple
 		}
 
 		type repair struct {
@@ -77,7 +69,7 @@ func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrume
 		deletes := map[int][]common.KeyScoreMember{} // cluster index: KeyScoreMembers to Delete
 
 		// Determine which clusters require repairs.
-		for km, scoreTuples := range gathered {
+		for km, scoreTuples := range responses {
 			// Walk once, to determine the correct data.
 			highestScore, wasInserted := 0., false
 			for _, scoreTuple := range scoreTuples {
