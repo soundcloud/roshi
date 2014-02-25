@@ -27,7 +27,7 @@ type Pool struct {
 // Max connections per instance is the size of the connection pool for each
 // Redis instance. Hash defines the hash function used by the With methods.
 // Any function that takes a string and returns a uint32 may be used. Package
-// shard ships with several options, including Murmur3, FNV, and FNVa.
+// pool ships with several options, including Murmur3, FNV, and FNVa.
 func New(
 	addresses []string,
 	connectTimeout, readTimeout, writeTimeout time.Duration,
@@ -54,7 +54,7 @@ func (p *Pool) Index(key string) int {
 	return int(p.hash(key) % uint32(len(p.connections)))
 }
 
-// Size returns how many instances the shards sits over. Useful for ranging
+// Size returns how many instances the pool sits over. Useful for ranging
 // over with WithIndex.
 func (p *Pool) Size() int {
 	return len(p.connections)
