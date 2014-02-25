@@ -15,7 +15,7 @@ import (
 	"github.com/soundcloud/roshi/farm"
 	"github.com/soundcloud/roshi/instrumentation"
 	"github.com/soundcloud/roshi/instrumentation/statsd"
-	"github.com/soundcloud/roshi/shard"
+	"github.com/soundcloud/roshi/pool"
 	"github.com/tsenart/tb"
 )
 
@@ -63,11 +63,11 @@ func main() {
 	var hashFunc func(string) uint32
 	switch strings.ToLower(*redisHash) {
 	case "murmur3":
-		hashFunc = shard.Murmur3
+		hashFunc = pool.Murmur3
 	case "fnv":
-		hashFunc = shard.FNV
+		hashFunc = pool.FNV
 	case "fnva":
-		hashFunc = shard.FNVa
+		hashFunc = pool.FNVa
 	default:
 		log.Fatalf("unknown hash '%s'", *redisHash)
 	}
@@ -117,7 +117,7 @@ func makeClusters(
 			continue
 		}
 		clusters = append(clusters, cluster.New(
-			shard.New(
+			pool.New(
 				addresses,
 				connectTimeout, readTimeout, writeTimeout,
 				redisMCPI,
