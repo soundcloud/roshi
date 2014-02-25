@@ -3,14 +3,14 @@
 [![GoDoc](https://godoc.org/github.com/soundcloud/roshi/cluster?status.png)](https://godoc.org/github.com/soundcloud/roshi/cluster)
 
 Package cluster provides an Insert/Select/Delete API on top of a single
-[Shards object][shards]. Cluster accepts KeyScoreMember tuples from clients,
+[Pool object][pool]. Cluster accepts KeyScoreMember tuples from clients,
 which map to [Redis sorted set semantics][zset]. Briefly, **key** identifies
 the set, **member** the element in the set, and **score** is a sort of version
 associated with the element. Write (Insert or Delete) operations are no-ops if
 the passed score is less than or equal to any previously written score for
 that member.
 
-[shards]: https://godoc.org/github.com/soundcloud/roshi/shard#Shards
+[pool]: https://godoc.org/github.com/soundcloud/roshi/pool#Pool
 [zset]: http://redis.io/commands#sorted-set
 
 All elements of the KeyScoreMember tuple are expected to be provided by the

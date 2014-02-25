@@ -232,13 +232,13 @@ job with a relatively small surface area. From the bottom up...
   utilizing the [sorted set][sorted-set] data type. For more details on how
   the sorted sets are used, see package cluster, below.
 
-- **[Package shard][shard]** performs key-based sharding over one or more Redis
+- **[Package pool][pool]** performs key-based sharding over one or more Redis
   instances. It exposes basically a single method, taking a key and yielding a
   connection to the Redis instance that should hold that key. All Redis
-  interactions go through package shard.
+  interactions go through package pool.
 
 - **[Package cluster][cluster]** implements an Insert/Select/Delete API on top
-  of package shard. To ensure idempotency and [commutativity][commutativity],
+  of package pool. To ensure idempotency and [commutativity][commutativity],
   package cluster expects timestamps to arrive as float64s, and refuses writes
   with smaller timestamps than what's already been persisted. To ensure
   information isn't lost via deletes, package cluster maintains two physical
@@ -260,7 +260,7 @@ job with a relatively small surface area. From the bottom up...
   repairs.
 
 [sorted-set]: http://redis.io/commands#sorted_set
-[shard]: http://github.com/soundcloud/roshi/tree/master/shard
+[pool]: http://github.com/soundcloud/roshi/tree/master/pool
 [cluster]: http://github.com/soundcloud/roshi/tree/master/cluster
 [commutativity]: http://en.wikipedia.org/wiki/Commutative_property
 [farm]: http://github.com/soundcloud/roshi/tree/master/farm
@@ -274,7 +274,7 @@ job with a relatively small surface area. From the bottom up...
 +-roshi-server---------------------------------------------------------------+
 | +-Farm-------------------------------------------------------------------+ |
 | | +-Cluster------------+  +-Cluster------------+  +-Cluster------------+ | |
-| | | +-Shards---------+ |  | +-Shards---------+ |  | +-Shards---------+ | | |
+| | | +-Pool-----------+ |  | +-Pool-----------+ |  | +-Pool-----------+ | | |
 | | | | Redis instance | |  | | Redis instance | |  | | Redis instance | | | |
 | | | | Redis instance | |  | | Redis instance | |  | | Redis instance | | | |
 | | | | Redis instance | |  | | Redis instance | |  | | Redis instance | | | |

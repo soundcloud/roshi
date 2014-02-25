@@ -37,7 +37,7 @@ for _, key := range keys {
 wg := sync.WaitGroup{}
 wg.Add(len(m))
 for index, keys := range m {
-	// Shards are safe for concurrent access.
+	// Pool is safe for concurrent access.
 	go p.WithIndex(index, func(c redis.Conn) error) {
 		defer wg.Done()
 		for _, key := range keys {
