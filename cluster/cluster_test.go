@@ -11,7 +11,7 @@ import (
 	"github.com/garyburd/redigo/redis"
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
-	"github.com/soundcloud/roshi/shard"
+	"github.com/soundcloud/roshi/pool"
 )
 
 func TestInsertSelectKeys(t *testing.T) {
@@ -353,17 +353,17 @@ func TestJSONMarshalling(t *testing.T) {
 }
 
 func integrationCluster(t *testing.T, addresses string, maxSize int) cluster.Cluster {
-	s := shard.New(
+	p := pool.New(
 		strings.Split(addresses, ","),
 		1*time.Second, // connect timeout
 		1*time.Second, // read timeout
 		1*time.Second, // write timeout
 		10,            // max connections per instance
-		shard.Murmur3, // hash
+		pool.Murmur3,  // hash
 	)
 
-	for i := 0; i < s.Size(); i++ {
-		s.WithIndex(i, func(conn redis.Conn) error {
+	for i := 0; i < p.Size(); i++ {
+		p.WithIndex(i, func(conn redis.Conn) error {
 			_, err := conn.Do("FLUSHDB")
 			if err != nil {
 				t.Fatal(err)
@@ -372,5 +372,5 @@ func integrationCluster(t *testing.T, addresses string, maxSize int) cluster.Clu
 		})
 	}
 
-	return cluster.New(s, maxSize, nil)
+	return cluster.New(p, maxSize, nil)
 }

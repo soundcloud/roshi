@@ -13,7 +13,7 @@ import (
 	"github.com/garyburd/redigo/redis"
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/instrumentation"
-	"github.com/soundcloud/roshi/shard"
+	"github.com/soundcloud/roshi/pool"
 )
 
 func init() {
@@ -125,7 +125,7 @@ func init() {
 
 // cluster implements the Cluster interface on a concrete Redis cluster.
 type cluster struct {
-	shards          *shard.Shards
+	pool            *pool.Pool
 	maxSize         int
 	instrumentation instrumentation.Instrumentation
 }
@@ -133,12 +133,12 @@ type cluster struct {
 // New creates and returns a new Cluster backed by a concrete Redis cluster.
 // maxSize for each key will be enforced at write time. Instrumentation may be
 // nil.
-func New(shards *shard.Shards, maxSize int, instr instrumentation.Instrumentation) Cluster {
+func New(pool *pool.Pool, maxSize int, instr instrumentation.Instrumentation) Cluster {
 	if instr == nil {
 		instr = instrumentation.NopInstrumentation{}
 	}
 	return &cluster{
-		shards:          shards,
+		pool:            pool,
 		maxSize:         maxSize,
 		instrumentation: instr,
 	}
@@ -149,7 +149,7 @@ func (c *cluster) Insert(tuples []common.KeyScoreMember) error {
 	// Bucketize
 	m := map[int][]common.KeyScoreMember{}
 	for _, tuple := range tuples {
-		index := c.shards.Index(tuple.Key)
+		index := c.pool.Index(tuple.Key)
 		m[index] = append(m[index], tuple)
 	}
 
@@ -158,7 +158,7 @@ func (c *cluster) Insert(tuples []common.KeyScoreMember) error {
 	for index, tuples := range m {
 		go func(index int, tuples []common.KeyScoreMember) {
 
-			errChan <- c.shards.WithIndex(index, func(conn redis.Conn) error {
+			errChan <- c.pool.WithIndex(index, func(conn redis.Conn) error {
 				return pipelineInsert(conn, tuples, c.maxSize)
 			})
 
@@ -188,7 +188,7 @@ func (c *cluster) Select(keys []string, offset, limit int) <-chan Element {
 		// Bucketize
 		m := map[int][]string{}
 		for _, key := range keys {
-			index := c.shards.Index(key)
+			index := c.pool.Index(key)
 			m[index] = append(m[index], key)
 		}
 
@@ -204,7 +204,7 @@ func (c *cluster) Select(keys []string, offset, limit int) <-chan Element {
 				// minimize our time with the redis.Conn.
 				var elements []Element
 				var result map[string][]common.KeyScoreMember
-				if err := c.shards.WithIndex(index, func(conn redis.Conn) (err error) {
+				if err := c.pool.WithIndex(index, func(conn redis.Conn) (err error) {
 					result, err = pipelineRevRange(conn, keys, offset, limit)
 					return
 				}); err != nil {
@@ -231,7 +231,7 @@ func (c *cluster) Delete(tuples []common.KeyScoreMember) error {
 	// Bucketize
 	m := map[int][]common.KeyScoreMember{}
 	for _, tuple := range tuples {
-		index := c.shards.Index(tuple.Key)
+		index := c.pool.Index(tuple.Key)
 		m[index] = append(m[index], tuple)
 	}
 
@@ -239,7 +239,7 @@ func (c *cluster) Delete(tuples []common.KeyScoreMember) error {
 	errChan := make(chan error, len(m))
 	for index, tuples := range m {
 		go func(index int, tuples []common.KeyScoreMember) {
-			errChan <- c.shards.WithIndex(index, func(conn redis.Conn) error {
+			errChan <- c.pool.WithIndex(index, func(conn redis.Conn) error {
 				return pipelineDelete(conn, tuples, c.maxSize)
 			})
 
@@ -261,7 +261,7 @@ func (c *cluster) Delete(tuples []common.KeyScoreMember) error {
 func (c *cluster) Score(key, member string) (float64, bool, error) {
 	var score float64
 	var inserted bool
-	err := c.shards.With(key, func(conn redis.Conn) (err error) {
+	err := c.pool.With(key, func(conn redis.Conn) (err error) {
 		score, inserted, err = pipelineScore(conn, key, member)
 		return
 	})
@@ -273,12 +273,12 @@ func (c *cluster) Keys(batchSize int) <-chan []string {
 	ch := make(chan []string)
 	go func() {
 		defer close(ch)
-		for i, index := range rand.Perm(c.shards.Size()) {
-			log.Printf("cluster: Keys: scanning shard %d/%d, index %d (batch size %d)", i+1, c.shards.Size(), index, batchSize)
+		for i, index := range rand.Perm(c.pool.Size()) {
+			log.Printf("cluster: Keys: scanning pool %d/%d, index %d (batch size %d)", i+1, c.pool.Size(), index, batchSize)
 			cursor := 0
 			batch := make([]string, 0, batchSize)
 			for {
-				if err := c.shards.WithIndex(index, func(conn redis.Conn) error {
+				if err := c.pool.WithIndex(index, func(conn redis.Conn) error {
 					values, err := redis.Values(conn.Do("SCAN", cursor, "COUNT", fmt.Sprint(batchSize)))
 					if err != nil {
 						return err
