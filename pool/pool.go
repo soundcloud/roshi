@@ -1,5 +1,5 @@
-// Package shard performs key-based sharding over multiple Redis instances.
-package shard
+// Package pool performs key-based sharding over multiple Redis instances.
+package pool
 
 import (
 	"time"
@@ -7,13 +7,13 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
-// Shards maintains a connection pool for multiple Redis instances.
-type Shards struct {
-	pools []*connectionPool
-	hash  func(string) uint32
+// Pool maintains a connection pool for multiple Redis instances.
+type Pool struct {
+	connections []*connectionPool
+	hash        func(string) uint32
 }
 
-// New creates and returns a new Shards object.
+// New creates and returns a new Pool object.
 //
 // Addresses are host:port strings for each underlying Redis instance. The
 // number and order of the addresses determines the hash slots, so be careful
@@ -33,31 +33,31 @@ func New(
 	connectTimeout, readTimeout, writeTimeout time.Duration,
 	maxConnectionsPerInstance int,
 	hash func(string) uint32,
-) *Shards {
-	pools := make([]*connectionPool, len(addresses))
+) *Pool {
+	connections := make([]*connectionPool, len(addresses))
 	for i, address := range addresses {
-		pools[i] = newConnectionPool(
+		connections[i] = newConnectionPool(
 			address,
 			connectTimeout, readTimeout, writeTimeout,
 			maxConnectionsPerInstance,
 		)
 	}
-	return &Shards{
-		pools: pools,
-		hash:  hash,
+	return &Pool{
+		connections: connections,
+		hash:        hash,
 	}
 }
 
 // Index returns a reference to the connection pool that will be used to
 // satisfy any request for the given key. Pass that value to WithIndex.
-func (s *Shards) Index(key string) int {
-	return int(s.hash(key) % uint32(len(s.pools)))
+func (p *Pool) Index(key string) int {
+	return int(p.hash(key) % uint32(len(p.connections)))
 }
 
 // Size returns how many instances the shards sits over. Useful for ranging
 // over with WithIndex.
-func (s *Shards) Size() int {
-	return len(s.pools)
+func (p *Pool) Size() int {
+	return len(p.connections)
 }
 
 // WithIndex selects a single Redis instance from the referenced connection
@@ -68,9 +68,9 @@ func (s *Shards) Size() int {
 // WithIndex will return an error if it wasn't able to successfully retrieve a
 // connection from the referenced connection pool, and will forward any error
 // returned by the `do` function.
-func (s *Shards) WithIndex(index int, do func(redis.Conn) error) error {
-	conn, err := s.pools[index].get() // blocking up to connectTimeout
-	defer s.pools[index].put(conn)    // always put, even if it's nil
+func (p *Pool) WithIndex(index int, do func(redis.Conn) error) error {
+	conn, err := p.connections[index].get() // blocking up to connectTimeout
+	defer p.connections[index].put(conn)    // always put, even if it's nil
 	if err != nil {
 		return err
 	}
@@ -84,15 +84,14 @@ func (s *Shards) WithIndex(index int, do func(redis.Conn) error) error {
 
 // With is a convenience function that combines Index and WithIndex, for
 // simple/single Redis requests on a single key.
-func (s *Shards) With(key string, do func(redis.Conn) error) error {
-	index := s.Index(key)
-	return s.WithIndex(index, do)
+func (p *Pool) With(key string, do func(redis.Conn) error) error {
+	return p.WithIndex(p.Index(key), do)
 }
 
 // Close closes all available (idle) connections in the cluster.
 // Close does not affect oustanding (in-use) connections.
-func (s *Shards) Close() error {
-	for _, pool := range s.pools {
+func (p *Pool) Close() error {
+	for _, pool := range p.connections {
 		pool.closeAll()
 	}
 	return nil

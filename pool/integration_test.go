@@ -1,4 +1,4 @@
-package shard_test
+package pool_test
 
 import (
 	"os"
@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/garyburd/redigo/redis"
-	"github.com/soundcloud/roshi/shard"
+	"github.com/soundcloud/roshi/pool"
 )
 
 func TestRecovery(t *testing.T) {
@@ -21,11 +21,11 @@ func TestRecovery(t *testing.T) {
 	port := "10001"
 	maxConnectionsPerInstance := 2
 	redisTimeout := 50 * time.Millisecond
-	s := shard.New(
+	p := pool.New(
 		[]string{"localhost:" + port},
 		redisTimeout, redisTimeout, redisTimeout,
 		maxConnectionsPerInstance,
-		shard.Murmur3,
+		pool.Murmur3,
 	)
 
 	waitDuration, err := time.ParseDuration(os.Getenv("TEST_REDIS_WAIT_DURATION"))
@@ -43,7 +43,7 @@ func TestRecovery(t *testing.T) {
 		time.Sleep(waitDuration)
 
 		// Try initial PING
-		if err := s.With("irrelevant", func(conn redis.Conn) error {
+		if err := p.With("irrelevant", func(conn redis.Conn) error {
 			_, err := conn.Do("PING")
 			return err
 		}); err != nil {
@@ -57,7 +57,7 @@ func TestRecovery(t *testing.T) {
 	go func() {
 		// Redis is down. Make a bunch of requests. All should fail quickly.
 		for i := 0; i < requests; i++ {
-			if err := s.With("irrelevant", func(conn redis.Conn) error {
+			if err := p.With("irrelevant", func(conn redis.Conn) error {
 				_, err := conn.Do("PING")
 				return err
 			}); err == nil {
@@ -85,14 +85,14 @@ func TestRecovery(t *testing.T) {
 		time.Sleep(waitDuration)
 
 		// Try second PING x1
-		err := s.With("irrelevant", func(conn redis.Conn) error {
+		err := p.With("irrelevant", func(conn redis.Conn) error {
 			_, err := conn.Do("PING")
 			return err
 		})
 		t.Logf("Second PING x1 gave error %v (just FYI)", err)
 
 		// Try second PING x2
-		if err := s.With("irrelevant", func(conn redis.Conn) error {
+		if err := p.With("irrelevant", func(conn redis.Conn) error {
 			_, err := conn.Do("PING")
 			return err
 		}); err != nil {
