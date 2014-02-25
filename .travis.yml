@@ -11,14 +11,14 @@ env:
     - TEST_REDIS_ADDRESSES=localhost:6379 TEST_REDIS_WAIT_DURATION=5s
 
 before_script:
-    - sh -c "sleep 5"  # give Redis a chance to start
+    - sh -c "sleep 5"  # give Redis a(n additional) chance to start
 
 script:
     - go test -v github.com/soundcloud/roshi/common
     - go test -v github.com/soundcloud/roshi/instrumentation
-    - go test -v github.com/soundcloud/roshi/shard
+    - go test -v github.com/soundcloud/roshi/pool
     - go test -v github.com/soundcloud/roshi/cluster
     - go test -v github.com/soundcloud/roshi/farm
     - go test -v github.com/soundcloud/roshi/roshi-server
-
+    - go test -v github.com/soundcloud/roshi/roshi-walker
 
