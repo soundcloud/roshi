@@ -112,9 +112,9 @@ var (
 	testTupleB2 = common.KeyScoreMember{Key: "b", Score: 2, Member: "b"}
 	testTupleC1 = common.KeyScoreMember{Key: "c", Score: 1, Member: "c"}
 
-	testKeyMemberA = keyMember{Key: "a", Member: "a"}
-	testKeyMemberB = keyMember{Key: "b", Member: "b"}
-	testKeyMemberC = keyMember{Key: "c", Member: "c"}
+	testKeyMemberA = common.KeyMember{Key: "a", Member: "a"}
+	testKeyMemberB = common.KeyMember{Key: "b", Member: "b"}
+	testKeyMemberC = common.KeyMember{Key: "c", Member: "c"}
 )
 
 func s2tupleSet(t *testing.T, s string) tupleSet {

@@ -29,7 +29,7 @@ func main() {
 		redisConnectTimeout = flag.Duration("redis.connect.timeout", 3*time.Second, "Redis connect timeout")
 		redisReadTimeout    = flag.Duration("redis.read.timeout", 3*time.Second, "Redis read timeout")
 		redisWriteTimeout   = flag.Duration("redis.write.timeout", 3*time.Second, "Redis write timeout")
-		redisMCPI           = flag.Int("redis.mcpi", 10, "Max connections per Redis instance")
+		redisMCPI           = flag.Int("redis.mcpi", 2, "Max connections per Redis instance")
 		redisHash           = flag.String("redis.hash", "murmur3", "Redis hash function: murmur3, fnv, fnva")
 		maxSize             = flag.Int("max.size", 10000, "Maximum number of events per key")
 		batchSize           = flag.Int("batch.size", 100, "keys to select per request")
@@ -42,6 +42,7 @@ func main() {
 		httpAddress         = flag.String("http.address", ":6060", "HTTP listen address (profiling endpoints only)")
 	)
 	flag.Parse()
+	log.SetFlags(log.Lmicroseconds)
 
 	// Validate integer arguments.
 	if *maxKeysPerSecond < int64(*batchSize) {
@@ -91,15 +92,21 @@ func main() {
 	// Set up our rate limiter. Remember: it's per-key, not per-request.
 	throttle := newThrottle(*maxKeysPerSecond)
 
-	// Perform the walk.
-	dst := farm.New(clusters, len(clusters), farm.SendAllReadAll, farm.AllRepairs, instr)
+	// Build the farm
+	readStrategy := farm.SendAllReadAll
+	repairStrategy := farm.AllRepairs // blocking
+	dst := farm.New(clusters, len(clusters), readStrategy, repairStrategy, instr)
+
+	// Perform the walk
+	begin := time.Now()
 	for {
 		src := scan(clusters, *batchSize, *scanLogInterval) // new key set
 		walkOnce(dst, throttle, src, *maxSize, instr)
 		if *once {
-			return
+			break
 		}
 	}
+	log.Printf("walk complete in %s", time.Since(begin))
 }
 
 func makeClusters(
@@ -138,33 +145,15 @@ func scan(clusters []cluster.Cluster, batchSize int, logInterval time.Duration) 
 	c := make(chan []string)
 	go func() {
 		defer close(c)
-		logTick := time.Tick(logInterval)
-		batches, keys, prev, mark := 0, 0, 0, time.Now()
-
 		for i, index := range rand.Perm(len(clusters)) {
-			log.Printf("scan: %d/%d, cluster index %d: begin", i+1, len(clusters), index)
+			log.Printf("walking the keyspace of cluster index %d (%d/%d)", index, i+1, len(clusters))
 			for batch := range clusters[index].Keys(batchSize) {
-				select {
-				case c <- batch:
-					//log.Printf(
-					//	"scan: %d/%d, cluster index %d: forwarded batch of %d",
-					//	i+1, len(clusters), index,
-					//	len(batch),
-					//)
-					batches += 1
-					keys += len(batch)
-
-				case <-logTick:
-					log.Printf(
-						"scan: %d/%d, cluster index %d: %d batches, %d keys, %.2f keys/sec",
-						i+1, len(clusters), index,
-						batches,
-						keys,
-						float64(keys-prev)/(time.Since(mark).Seconds()),
-					)
-					prev = keys
-					mark = time.Now()
-				}
+				c <- batch
+				// log.Printf(
+				// 	"scan: %d/%d, cluster index %d: forwarded batch of %d",
+				// 	i+1, len(clusters), index,
+				// 	len(batch),
+				// )
 			}
 		}
 	}()

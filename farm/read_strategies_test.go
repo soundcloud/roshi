@@ -3,7 +3,6 @@ package farm
 import (
 	"fmt"
 	"github.com/soundcloud/roshi/instrumentation"
-	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -52,7 +51,7 @@ func totalOpenChannelCount(clusters []cluster.Cluster) int {
 // repair was requested. This is useful in unit tests.
 func MockRepairs(repairCount *int32) RepairStrategy {
 	return func([]cluster.Cluster, instrumentation.RepairInstrumentation) coreRepairStrategy {
-		return func(kms []keyMember) {
+		return func(kms []common.KeyMember) {
 			atomic.AddInt32(repairCount, int32(len(kms)))
 		}
 	}
@@ -87,44 +86,42 @@ func TestSendAllReadAll(t *testing.T) {
 
 	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
 	if err := checkResult(result, err); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	if expected, got := 3, totalSelectCount(clusters); expected != got {
-		t.Errorf("expected %d select calls, got %d", expected, got)
+		t.Fatalf("expected %d select calls, got %d", expected, got)
 	}
 	if expected, got := 0, int(atomic.LoadInt32(&repairs)); expected != got {
-		t.Errorf("expected %d repairs, got %d", expected, got)
+		t.Fatalf("expected %d repairs, got %d", expected, got)
 	}
 
 	// Now delete the ksm from one cluster and then read it again,
 	// triggering a repair.
 	clusters[0].Delete([]common.KeyScoreMember{testingKeyScoreMember})
 	result, err = farm.Select([]string{"key", "nokey"}, 0, 10)
-	runtime.Gosched() // yield to the repairer
 	if err := checkResult(result, err); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	if expected, got := 6, totalSelectCount(clusters); expected != got {
-		t.Errorf("expected %d select calls, got %d", expected, got)
+		t.Fatalf("expected %d select calls, got %d", expected, got)
 	}
 	if expected, got := 1, int(atomic.LoadInt32(&repairs)); expected != got {
-		t.Errorf("expected %d repairs, got %d", expected, got)
+		t.Fatalf("expected %d repairs, got %d", expected, got)
 	}
 
 	// Now replace cluster 0 with a failing one. No repairs should
 	// happen. Result should still be returned as normal.
 	clusters[0] = newFailingMockCluster()
 	result, err = farm.Select([]string{"key", "nokey"}, 0, 10)
-	runtime.Gosched()
 	if err := checkResult(result, err); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	if expected, got := 7, totalSelectCount(clusters); expected != got {
-		t.Errorf("expected %d select calls, got %d", expected, got)
+		t.Fatalf("expected %d select calls, got %d", expected, got)
 	}
 	if expected, got := 1, int(atomic.LoadInt32(&repairs)); expected != got {
 		// Repair count still 1.
-		t.Errorf("expected %d repairs, got %d", expected, got)
+		t.Fatalf("expected %d repairs, got %d", expected, got)
 	}
 
 	// Finally change the ksm in cluster 1 to one with a less recent
@@ -142,18 +139,17 @@ func TestSendAllReadAll(t *testing.T) {
 		common.KeyScoreMember{Key: "key", Score: 3.1, Member: "member"},
 	})
 	result, err = farm.Select([]string{"key", "nokey"}, 0, 10)
-	runtime.Gosched()
 	if err := checkResult(result, err); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	if expected, got := 10, totalSelectCount(clusters); expected != got {
-		t.Errorf("expected %d select calls, got %d", expected, got)
+		t.Fatalf("expected %d select calls, got %d", expected, got)
 	}
 	if expected, got := 2, int(atomic.LoadInt32(&repairs)); expected != got {
-		t.Errorf("expected %d repairs, got %d", expected, got)
+		t.Fatalf("expected %d repairs, got %d", expected, got)
 	}
 	if totalOpenChannelCount(clusters) > 0 {
-		t.Error("not all channels closed")
+		t.Fatal("not all channels closed")
 	}
 }
 

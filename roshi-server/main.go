@@ -82,15 +82,17 @@ func main() {
 	}
 	log.Printf("using %s read strategy", *farmReadStrategy)
 
-	// Parse repair strategy.
+	// Parse repair strategy. Note that because this is a client-facing
+	// production server, all repair strategies get a Nonblocking wrapper!
+	repairRequestBufferSize := 100
 	var repairStrategy farm.RepairStrategy
 	switch strings.ToLower(*farmRepairStrategy) {
 	case "allrepairs":
-		repairStrategy = farm.AllRepairs
+		repairStrategy = farm.Nonblocking(repairRequestBufferSize, farm.AllRepairs)
 	case "norepairs":
-		repairStrategy = farm.NoRepairs
+		repairStrategy = farm.Nonblocking(repairRequestBufferSize, farm.NoRepairs)
 	case "ratelimitedrepairs":
-		repairStrategy = farm.RateLimitedRepairs(*farmRepairMaxKeysPerSecond)
+		repairStrategy = farm.Nonblocking(repairRequestBufferSize, farm.RateLimited(*farmRepairMaxKeysPerSecond, farm.AllRepairs))
 	default:
 		log.Fatalf("unknown repair strategy '%s'", *farmRepairStrategy)
 	}
@@ -284,22 +286,18 @@ func handleDelete(deleter cluster.Deleter) http.HandlerFunc {
 }
 
 func flatten(m map[string][]common.KeyScoreMember, offset, limit int) []common.KeyScoreMember {
-	a := common.KeyScoreMembers{}
+	a := []common.KeyScoreMember{}
 	for _, tuples := range m {
 		a = append(a, tuples...)
 	}
-
-	sort.Sort(a)
-
+	sort.Sort(keyScoreMembers(a))
 	if len(a) < offset {
 		return []common.KeyScoreMember{}
 	}
 	a = a[offset:]
-
 	if len(a) > limit {
 		a = a[:limit]
 	}
-
 	return a
 }
 
@@ -398,3 +396,9 @@ func evaluateScalarPercentage(s string, n int) (int, error) {
 	}
 	return value, nil
 }
+
+type keyScoreMembers []common.KeyScoreMember
+
+func (a keyScoreMembers) Len() int           { return len(a) }
+func (a keyScoreMembers) Less(i, j int) bool { return a[i].Score > a[j].Score }
+func (a keyScoreMembers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }

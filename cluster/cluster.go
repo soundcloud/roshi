@@ -50,12 +50,10 @@ type Deleter interface {
 	Delete(tuples []common.KeyScoreMember) error
 }
 
-// Scorer defines the method to retrieve the score of a specific key-member,
-// if it's known to the cluster. It also returns whether that key-member is
-// inserted (present) or deleted (not present) via the bool return parameter
-// (true = inserted).
+// Scorer defines the method to retrieve the presence information of a set of
+// key-members.
 type Scorer interface {
-	Score(key, member string) (float64, bool, error)
+	Score([]common.KeyMember) (map[common.KeyMember]Presence, error)
 }
 
 // Scanner emits all keys in the keyspace over a returned
@@ -145,24 +143,24 @@ func New(pool *pool.Pool, maxSize int, instr instrumentation.Instrumentation) Cl
 }
 
 // Insert efficiently performs ZADDs for each of the passed tuples.
-func (c *cluster) Insert(tuples []common.KeyScoreMember) error {
+func (c *cluster) Insert(keyScoreMembers []common.KeyScoreMember) error {
 	// Bucketize
 	m := map[int][]common.KeyScoreMember{}
-	for _, tuple := range tuples {
+	for _, tuple := range keyScoreMembers {
 		index := c.pool.Index(tuple.Key)
 		m[index] = append(m[index], tuple)
 	}
 
 	// Scatter
 	errChan := make(chan error, len(m))
-	for index, tuples := range m {
-		go func(index int, tuples []common.KeyScoreMember) {
+	for index, keyScoreMembers := range m {
+		go func(index int, keyScoreMembers []common.KeyScoreMember) {
 
 			errChan <- c.pool.WithIndex(index, func(conn redis.Conn) error {
-				return pipelineInsert(conn, tuples, c.maxSize)
+				return pipelineInsert(conn, keyScoreMembers, c.maxSize)
 			})
 
-		}(index, tuples)
+		}(index, keyScoreMembers)
 	}
 
 	// Gather
@@ -227,23 +225,23 @@ func (c *cluster) Select(keys []string, offset, limit int) <-chan Element {
 }
 
 // Delete efficiently performs ZREMs for each of the passed tuples.
-func (c *cluster) Delete(tuples []common.KeyScoreMember) error {
+func (c *cluster) Delete(keyScoreMembers []common.KeyScoreMember) error {
 	// Bucketize
 	m := map[int][]common.KeyScoreMember{}
-	for _, tuple := range tuples {
-		index := c.pool.Index(tuple.Key)
-		m[index] = append(m[index], tuple)
+	for _, keyScoreMember := range keyScoreMembers {
+		index := c.pool.Index(keyScoreMember.Key)
+		m[index] = append(m[index], keyScoreMember)
 	}
 
 	// Scatter
 	errChan := make(chan error, len(m))
-	for index, tuples := range m {
-		go func(index int, tuples []common.KeyScoreMember) {
+	for index, keyScoreMembers := range m {
+		go func(index int, keyScoreMembers []common.KeyScoreMember) {
 			errChan <- c.pool.WithIndex(index, func(conn redis.Conn) error {
-				return pipelineDelete(conn, tuples, c.maxSize)
+				return pipelineDelete(conn, keyScoreMembers, c.maxSize)
 			})
 
-		}(index, tuples)
+		}(index, keyScoreMembers)
 	}
 
 	// Gather
@@ -255,17 +253,56 @@ func (c *cluster) Delete(tuples []common.KeyScoreMember) error {
 	return nil
 }
 
-// Score returns the score of the given key-member combination and
-// whether that score has been found with the deletes or the inserts
-// key (true: inserts, false: deletes).
-func (c *cluster) Score(key, member string) (float64, bool, error) {
-	var score float64
-	var inserted bool
-	err := c.pool.With(key, func(conn redis.Conn) (err error) {
-		score, inserted, err = pipelineScore(conn, key, member)
-		return
-	})
-	return score, inserted, err
+// Score returns the presence statistics of each passed key-member.
+// That is, whether the key-member exists in this cluster, if it's in
+// an insert set, and its score.
+func (c *cluster) Score(keyMembers []common.KeyMember) (map[common.KeyMember]Presence, error) {
+	// Bucketize
+	m := map[int][]common.KeyMember{}
+	for _, keyMember := range keyMembers {
+		index := c.pool.Index(keyMember.Key)
+		m[index] = append(m[index], keyMember)
+	}
+
+	// Scatter
+	type response struct {
+		presenceMap map[common.KeyMember]Presence
+		err         error
+	}
+	responseChan := make(chan response, len(m))
+	for index, keyMembers := range m {
+		go func(index int, keyMembers []common.KeyMember) {
+			var presenceMap map[common.KeyMember]Presence
+			err := c.pool.WithIndex(index, func(conn redis.Conn) (err error) {
+				presenceMap, err = pipelineScore(conn, keyMembers)
+				return
+			})
+			if err != nil {
+				log.Printf("cluster: Score: %q: %s", c.pool.ID(index), err)
+			}
+			responseChan <- response{presenceMap, err}
+		}(index, keyMembers)
+	}
+
+	// Gather
+	presenceMap := map[common.KeyMember]Presence{}
+	for i := 0; i < cap(responseChan); i++ {
+		response := <-responseChan
+		if response.err != nil {
+			continue
+		}
+		for keyMember, presence := range response.presenceMap {
+			presenceMap[keyMember] = presence
+		}
+	}
+	return presenceMap, nil
+}
+
+// Presence represents the state of a given key-member in a cluster.
+type Presence struct {
+	Present  bool
+	Inserted bool // false = deleted
+	Score    float64
 }
 
 // Keys implements the Scanner interface.
@@ -273,8 +310,8 @@ func (c *cluster) Keys(batchSize int) <-chan []string {
 	ch := make(chan []string)
 	go func() {
 		defer close(ch)
-		for i, index := range rand.Perm(c.pool.Size()) {
-			log.Printf("cluster: Keys: scanning pool %d/%d, index %d (batch size %d)", i+1, c.pool.Size(), index, batchSize)
+		for _, index := range rand.Perm(c.pool.Size()) {
+			log.Printf("cluster: scanning keyspace of %q (batch size %d)", c.pool.ID(index), batchSize)
 			cursor := 0
 			batch := make([]string, 0, batchSize)
 			for {
@@ -288,7 +325,8 @@ func (c *cluster) Keys(batchSize int) <-chan []string {
 						return fmt.Errorf("received %d values from Redis, expected exactly 2", n)
 					}
 
-					if cursor, err = redis.Int(values[0], nil); err != nil {
+					newCursor, err := redis.Int(values[0], nil)
+					if err != nil {
 						return err
 					}
 
@@ -308,13 +346,14 @@ func (c *cluster) Keys(batchSize int) <-chan []string {
 							}
 						}
 					}
+					cursor = newCursor
 					return nil
-				}); err != nil {
-					log.Printf("cluster: during Keys on instance %d: %s", index, err)
-					break // Skip failed instance.
-				}
-				if cursor == 0 {
-					break // Back at cursor 0, this instance is done.
+				}); err == nil && cursor == 0 {
+					log.Printf("cluster: Keys on %q is complete", c.pool.ID(index))
+					break // No error, and cursor back at 0: this instance is done.
+				} else if err != nil {
+					log.Printf("cluster: during Keys on %q: %s", c.pool.ID(index), err)
+					time.Sleep(1 * time.Second) // and retry
 				}
 			}
 			if len(batch) > 0 {
@@ -325,8 +364,8 @@ func (c *cluster) Keys(batchSize int) <-chan []string {
 	return ch
 }
 
-func pipelineInsert(conn redis.Conn, tuples []common.KeyScoreMember, maxSize int) error {
-	for _, tuple := range tuples {
+func pipelineInsert(conn redis.Conn, keyScoreMembers []common.KeyScoreMember, maxSize int) error {
+	for _, tuple := range keyScoreMembers {
 		if err := insertScript.Send(
 			conn,
 			tuple.Key,
@@ -342,7 +381,7 @@ func pipelineInsert(conn redis.Conn, tuples []common.KeyScoreMember, maxSize int
 		return err
 	}
 
-	for _ = range tuples {
+	for _ = range keyScoreMembers {
 		// TODO actually count inserts
 		if _, err := conn.Receive(); err != nil {
 			return err
@@ -409,27 +448,27 @@ func pipelineRevRange(conn redis.Conn, keys []string, offset, limit int) (map[st
 			return map[string][]common.KeyScoreMember{}, err
 		}
 
-		tuples := make([]common.KeyScoreMember, 0, len(values))
+		keyScoreMembers := make([]common.KeyScoreMember, 0, len(values))
 		for len(values) > 0 {
 			var member string
 			var score float64
 			if values, err = redis.Scan(values, &member, &score); err != nil {
 				return map[string][]common.KeyScoreMember{}, err
 			}
-			tuples = append(tuples, common.KeyScoreMember{Key: key, Score: score, Member: member})
+			keyScoreMembers = append(keyScoreMembers, common.KeyScoreMember{Key: key, Score: score, Member: member})
 		}
-		m[key] = tuples
+		m[key] = keyScoreMembers
 	}
 	return m, nil
 }
 
-func pipelineDelete(conn redis.Conn, tuples []common.KeyScoreMember, maxSize int) error {
-	for _, tuple := range tuples {
+func pipelineDelete(conn redis.Conn, keyScoreMembers []common.KeyScoreMember, maxSize int) error {
+	for _, keyScoreMember := range keyScoreMembers {
 		if err := deleteScript.Send(
 			conn,
-			tuple.Key,
-			tuple.Score,
-			tuple.Member,
+			keyScoreMember.Key,
+			keyScoreMember.Score,
+			keyScoreMember.Member,
 			maxSize,
 		); err != nil {
 			return err
@@ -440,7 +479,7 @@ func pipelineDelete(conn redis.Conn, tuples []common.KeyScoreMember, maxSize int
 		return err
 	}
 
-	for _ = range tuples {
+	for _ = range keyScoreMembers {
 		// TODO actually count deletes
 		if _, err := conn.Receive(); err != nil {
 			return err
@@ -450,55 +489,50 @@ func pipelineDelete(conn redis.Conn, tuples []common.KeyScoreMember, maxSize int
 	return nil
 }
 
-func pipelineScore(conn redis.Conn, key string, member string) (float64, bool, error) {
-	if err := conn.Send("MULTI"); err != nil {
-		return 0, false, err
-	}
-	if err := conn.Send("ZSCORE", key+insertSuffix, member); err != nil {
-		return 0, false, err
-	}
-	if err := conn.Send("ZSCORE", key+deleteSuffix, member); err != nil {
-		return 0, false, err
-	}
-	if err := conn.Send("EXEC"); err != nil {
-		return 0, false, err
-	}
-	if err := conn.Flush(); err != nil {
-		return 0, false, err
-	}
-
-	// Fast forward through the first three replies. Just make
-	// sure they have not resulted in an error. (The actual reply
-	// content is boring: "OK", "QUEUED", "QUEUED".)
-	for i := 0; i < 3; i++ {
-		if _, err := conn.Receive(); err != nil {
-			return 0, false, err
+func pipelineScore(conn redis.Conn, keyMembers []common.KeyMember) (map[common.KeyMember]Presence, error) {
+	for _, keyMember := range keyMembers {
+		if err := conn.Send("ZSCORE", keyMember.Key+insertSuffix, keyMember.Member); err != nil {
+			return map[common.KeyMember]Presence{}, err
+		}
+		if err := conn.Send("ZSCORE", keyMember.Key+deleteSuffix, keyMember.Member); err != nil {
+			return map[common.KeyMember]Presence{}, err
 		}
 	}
-	values, err := redis.Values(conn.Receive())
-	if err != nil {
-		return 0, false, err
+	if err := conn.Flush(); err != nil {
+		return map[common.KeyMember]Presence{}, err
 	}
 
-	// Some sanity checks.
-	if n := len(values); n != 2 {
-		return 0, false, fmt.Errorf("received %d values from Redis, expected exactly 2", n)
+	m := map[common.KeyMember]Presence{}
+	for i := 0; i < len(keyMembers); i++ {
+		insertReply, insertErr := conn.Receive()
+		insertValue, insertErr := redis.Float64(insertReply, insertErr)
+		deleteReply, deleteErr := conn.Receive()
+		deleteValue, deleteErr := redis.Float64(deleteReply, deleteErr)
+		switch {
+		case insertErr == nil && deleteErr == redis.ErrNil:
+			m[keyMembers[i]] = Presence{
+				Present:  true,
+				Inserted: true,
+				Score:    insertValue,
+			}
+		case insertErr == redis.ErrNil && deleteErr == nil:
+			m[keyMembers[i]] = Presence{
+				Present:  true,
+				Inserted: false,
+				Score:    deleteValue,
+			}
+		case insertErr == redis.ErrNil && deleteErr == redis.ErrNil:
+			m[keyMembers[i]] = Presence{
+				Present: false,
+			}
+		default:
+			return map[common.KeyMember]Presence{}, fmt.Errorf(
+				"pipelineScore bad state for %v (%v/%v)",
+				keyMembers[i],
+				insertErr,
+				deleteErr,
+			)
+		}
 	}
-	if values[0] == nil && values[1] == nil {
-		return 0, false, fmt.Errorf("no member '%s' found for key '%s'", member, key)
-	}
-	if values[0] != nil && values[1] != nil {
-		return 0, false, fmt.Errorf("member '%s' of key '%s' seems to be deleted and inserted at the same time", member, key)
-	}
-
-	var score float64
-	var wasInserted bool
-	if values[0] != nil {
-		wasInserted = true
-		score, err = redis.Float64(values[0], nil)
-	} else {
-		wasInserted = false
-		score, err = redis.Float64(values[1], nil)
-	}
-	return score, wasInserted, err
+	return m, nil
 }

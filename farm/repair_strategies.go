@@ -1,7 +1,7 @@
 package farm
 
 import (
-	"sync"
+	"log"
 
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
@@ -14,146 +14,159 @@ import (
 type RepairStrategy func([]cluster.Cluster, instrumentation.RepairInstrumentation) coreRepairStrategy
 
 // coreRepairStrategy encodes one way of performing repair requests.
-type coreRepairStrategy func(kms []keyMember)
+type coreRepairStrategy func(kms []common.KeyMember)
 
-// keyMember is like a KeyScoreMember, just without score. It is used to pass
-// "suspects" to the core repair strategy.
-type keyMember struct {
-	Key    string
-	Member string
-}
-
-// AllRepairs is a RepairStrategy that does what you expect: actually issuing
-// the repairs with 100% probability. You may want to use RateLimitedRepairs
-// to cap the load to your clusters.
-func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrumentation) coreRepairStrategy {
-	return func(kms []keyMember) {
+// Nonblocking wraps a RepairStrategy with a buffer of the given size. Repair
+// requests are queued until the buffer is full, and then dropped.
+//
+// Nonblocking keeps read strategies responsive, while bounding process memory
+// usage.
+func Nonblocking(bufferSize int, repairStrategy RepairStrategy) RepairStrategy {
+	return func(clusters []cluster.Cluster, instr instrumentation.RepairInstrumentation) coreRepairStrategy {
+		c := make(chan []common.KeyMember, bufferSize)
 		go func() {
-			instr.RepairCall()
-			instr.RepairRequest(len(kms))
+			for kms := range c {
+				repairStrategy(clusters, instr)(kms)
+			}
 		}()
 
-		type scoreTuple struct {
-			score       float64
-			wasInserted bool
-			err         error
-		}
-
-		type responseTuple struct {
-			clusterIndex int
-			keyMember
-			scoreTuple
-		}
-
-		// Make Score requests. Do this sequentially, as if a key is totally
-		// missing from a cluster (which is the case when a node needs to be
-		// rebuilt) you'll end up making maxSize simultaneous Score requests,
-		// in unique goroutines, which is costly :) The alternative is to make
-		// Score take a slice of key-members.
-		responses := map[keyMember][]scoreTuple{}
-		for _, km := range kms {
-			for i, c := range clusters {
-				score, wasInserted, err := c.Score(km.Key, km.Member)
-				if _, ok := responses[km]; !ok {
-					responses[km] = make([]scoreTuple, len(clusters))
-				}
-				responses[km][i] = scoreTuple{score, wasInserted, err}
+		return func(kms []common.KeyMember) {
+			select {
+			case c <- kms:
+				break
+			default:
+				log.Printf("Nonblocking repairs: request buffer full; repair request discarded")
+				go instr.RepairDiscarded(len(kms))
 			}
 		}
+	}
+}
 
-		type repair struct {
-			common.KeyScoreMember
+// RateLimited wraps a repair strategy with rate limit. Repair requests that
+// would cause the instantaneous number of elements (score-members) per second
+// to exceed the passed limit are dropped.
+//
+// RateLimited keeps read strategies responsive, while bounding the load
+// applied to your infrastructure.
+func RateLimited(maxElementsPerSecond int, repairStrategy RepairStrategy) RepairStrategy {
+	return func(clusters []cluster.Cluster, instr instrumentation.RepairInstrumentation) coreRepairStrategy {
+		permits := permitter(allowAllPermitter{})
+		if maxElementsPerSecond >= 0 {
+			permits = permitter(tokenBucketPermitter{tb.NewBucket(int64(maxElementsPerSecond), -1)})
 		}
 
-		inserts := map[int][]common.KeyScoreMember{} // cluster index: KeyScoreMembers to Insert
-		deletes := map[int][]common.KeyScoreMember{} // cluster index: KeyScoreMembers to Delete
-
-		// Determine which clusters require repairs.
-		for km, scoreTuples := range responses {
-			// Walk once, to determine the correct data.
-			highestScore, wasInserted := 0., false
-			for _, scoreTuple := range scoreTuples {
-				if scoreTuple.err != nil {
-					// Don't consider error responses.
-					continue
-				}
-				if scoreTuple.score > highestScore {
-					highestScore = scoreTuple.score
-					wasInserted = scoreTuple.wasInserted
-				}
+		return func(kms []common.KeyMember) {
+			if n := len(kms); !permits.canHas(int64(n)) {
+				log.Printf("RateLimited repairs: element rate exceeded; repair request discarded")
+				instr.RepairDiscarded(n)
+				return
 			}
-
-			// Choose the correct target write operation for this keyMember.
-			target := inserts
-			if !wasInserted {
-				target = deletes
-			}
-
-			// Walk again, to schedule any necessary repairs.
-			for clusterIndex, scoreTuple := range scoreTuples {
-				// Schedule a repair if the cluster returned an error, if it's
-				// storing a lower score, or if its inserted-vs-deleted
-				// boolean is not what it should be.
-				gotError := scoreTuple.err != nil
-				lowScore := scoreTuple.score < highestScore
-				badWrite := scoreTuple.wasInserted != wasInserted
-				if gotError || lowScore || badWrite {
-					target[clusterIndex] = append(target[clusterIndex], common.KeyScoreMember{
-						Key:    km.Key,
-						Score:  highestScore,
-						Member: km.Member,
-					})
-				}
-			}
+			repairStrategy(clusters, instr)(kms)
 		}
-
-		var wg sync.WaitGroup
-		wg.Add(len(inserts) + len(deletes))
-		do := func(write func([]common.KeyScoreMember) error, tuples []common.KeyScoreMember) {
-			if err := write(tuples); err == nil {
-				go instr.RepairWriteSuccess(len(tuples))
-			} else {
-				go instr.RepairWriteFailure(len(tuples))
-			}
-			wg.Done()
-		}
-
-		// Launch repairs.
-		for clusterIndex, tuples := range inserts {
-			write := clusters[clusterIndex].Insert
-			tuples := tuples
-			go do(write, tuples)
-		}
-		for clusterIndex, tuples := range deletes {
-			write := clusters[clusterIndex].Delete
-			tuples := tuples
-			go do(write, tuples)
-		}
-
-		wg.Wait()
 	}
 }
 
 // NoRepairs is a no-op repair strategy.
 func NoRepairs([]cluster.Cluster, instrumentation.RepairInstrumentation) coreRepairStrategy {
-	return func([]keyMember) {}
+	return func([]common.KeyMember) {}
 }
 
-// RateLimitedRepairs is a RepairStrategy generator, which limits the total
-// number of repaired key-member tuples to maxKeysPerSecond. Pass a negative
-// value to allow unlimited repair.
-func RateLimitedRepairs(maxKeysPerSecond int) RepairStrategy {
-	permits := permitter(allowAllPermitter{})
-	if maxKeysPerSecond >= 0 {
-		permits = permitter(tokenBucketPermitter{tb.NewBucket(int64(maxKeysPerSecond), -1)})
-	}
-	return func(clusters []cluster.Cluster, instr instrumentation.RepairInstrumentation) coreRepairStrategy {
-		return func(kms []keyMember) {
-			if n := len(kms); !permits.canHas(int64(n)) {
-				instr.RepairDiscarded(n)
-				return
+// AllRepairs is repair strategy that does what you expect: actually issue
+// repairs with 100% probability.
+//
+// You may want to wrap AllRepairs with Nonblocking and/or RateLimited to
+// control memory pressure in your process and/or load against your
+// infrastructure, respectively.
+func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrumentation) coreRepairStrategy {
+	return func(keyMembers []common.KeyMember) {
+		go func() {
+			instr.RepairCall()
+			instr.RepairRequest(len(keyMembers))
+		}()
+
+		// Every KeyMember has a presence in every cluster. Even if the
+		// cluster errors during Score, we keep a default (empty) presence.
+		// That means we may re-issue unnecessary writes, but that's OK!
+		presenceMap := map[common.KeyMember][]cluster.Presence{}
+		for _, keyMember := range keyMembers {
+			presenceMap[keyMember] = make([]cluster.Presence, len(clusters))
+		}
+
+		// Make Score requests sequentially. If a key is totally missing from
+		// a cluster, like when a node comes online empty and needs to be
+		// rebuilt, you'll end up asking about maxSize KeyMembers, which is
+		// probably a lot.
+		for index := range clusters {
+			// Make single request for this cluster.
+			scoreResponse, err := clusters[index].Score(keyMembers)
+			if err != nil {
+				log.Printf("AllRepairs: cluster %d: %s", index, err)
+				continue
 			}
-			AllRepairs(clusters, instr)(kms)
+			// Copy this cluster's presence information into our map.
+			for keyMember, presence := range scoreResponse {
+				presenceMap[keyMember][index] = presence
+			}
+		}
+
+		// With the collected responses, determine the correct state, and
+		// schedule write operations.
+		inserts := map[int][]common.KeyScoreMember{}
+		deletes := map[int][]common.KeyScoreMember{}
+		for keyMember, presenceSlice := range presenceMap {
+			// Walk once, to determine the correct state.
+			found, highestScore, wasInserted := false, 0., false
+			for _, presence := range presenceSlice {
+				if presence.Present && presence.Score > highestScore {
+					found = true
+					highestScore = presence.Score
+					wasInserted = presence.Inserted
+				}
+			}
+
+			if !found {
+				// This is indeed a strange situation, but it can arise if we
+				// get errors from every cluster during Score requests,, for
+				// example. We don't want to confuse that with presence in the
+				// remove set.
+				log.Printf("AllRepairs: %v not found anywhere, skipping", keyMember)
+				continue
+			}
+
+			// We now know the correct element.
+			keyScoreMember := common.KeyScoreMember{
+				Key:    keyMember.Key,
+				Score:  highestScore,
+				Member: keyMember.Member,
+			}
+
+			// Walk again, to schedule write operations.
+			for index, presence := range presenceSlice {
+				notThere := !presence.Present
+				lowScore := presence.Score < highestScore
+				wrongSet := presence.Inserted != wasInserted
+				if notThere || lowScore || wrongSet {
+					if wasInserted {
+						//log.Printf("AllRepairs: cluster %d: Insert %v", index, keyScoreMember)
+						inserts[index] = append(inserts[index], keyScoreMember)
+					} else {
+						//log.Printf("AllRepairs: cluster %d: Delete %v", index, keyScoreMember)
+						deletes[index] = append(deletes[index], keyScoreMember)
+					}
+				}
+			}
+		}
+
+		// Make write operations.
+		for index, keyScoreMembers := range inserts {
+			if err := clusters[index].Insert(keyScoreMembers); err != nil {
+				log.Printf("AllRepairs: cluster %d: during Insert: %s", index, err)
+			}
+		}
+		for index, keyScoreMembers := range deletes {
+			if err := clusters[index].Delete(keyScoreMembers); err != nil {
+				log.Printf("AllRepairs: cluster %d: during Delete: %s", index, err)
+			}
 		}
 	}
 }

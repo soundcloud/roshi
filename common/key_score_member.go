@@ -4,6 +4,13 @@ import (
 	"encoding/json"
 )
 
+// KeyMember is used by the Score method, and other places internally. It's
+// probably not useful to external users.
+type KeyMember struct {
+	Key    string
+	Member string
+}
+
 // KeyScoreMember represents one entry in a ZSET.
 type KeyScoreMember struct {
 	Key    string
@@ -40,15 +47,3 @@ func (ksm *KeyScoreMember) UnmarshalJSON(data []byte) error {
 	}
 	return err
 }
-
-// KeyScoreMembers implements sort.Sort methods on a slice of KeyScoreMember.
-type KeyScoreMembers []KeyScoreMember
-
-// Len implements sort.Sort.
-func (a KeyScoreMembers) Len() int { return len(a) }
-
-// Less implements sort.Sort.
-func (a KeyScoreMembers) Less(i, j int) bool { return a[i].Score > a[j].Score }
-
-// Swap implements sort.Sort.
-func (a KeyScoreMembers) Swap(i, j int) { a[i], a[j] = a[j], a[i] }

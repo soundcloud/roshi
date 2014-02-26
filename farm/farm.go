@@ -143,13 +143,13 @@ func (f *Farm) write(
 func unionDifference(tupleSets []tupleSet) (tupleSet, keyMemberSet) {
 	expectedCount := len(tupleSets)
 	counts := map[common.KeyScoreMember]int{}
-	scores := map[keyMember]float64{}
+	scores := map[common.KeyMember]float64{}
 	for _, tupleSet := range tupleSets {
 		for tuple := range tupleSet {
 			// For union
-			km := keyMember{Key: tuple.Key, Member: tuple.Member}
-			if score, ok := scores[km]; !ok || tuple.Score > score {
-				scores[km] = tuple.Score
+			keyMember := common.KeyMember{Key: tuple.Key, Member: tuple.Member}
+			if score, ok := scores[keyMember]; !ok || tuple.Score > score {
+				scores[keyMember] = tuple.Score
 			}
 			// For difference
 			counts[tuple]++
@@ -157,18 +157,18 @@ func unionDifference(tupleSets []tupleSet) (tupleSet, keyMemberSet) {
 	}
 
 	union, difference := tupleSet{}, keyMemberSet{}
-	for km, bestScore := range scores {
+	for keyMember, bestScore := range scores {
 		union.add(common.KeyScoreMember{
-			Key:    km.Key,
+			Key:    keyMember.Key,
 			Score:  bestScore,
-			Member: km.Member,
+			Member: keyMember.Member,
 		})
 	}
-	for ksm, count := range counts {
+	for keyScoreMember, count := range counts {
 		if count < expectedCount {
-			difference.add(keyMember{
-				Key:    ksm.Key,
-				Member: ksm.Member,
+			difference.add(common.KeyMember{
+				Key:    keyScoreMember.Key,
+				Member: keyScoreMember.Member,
 			})
 		}
 	}
@@ -210,29 +210,35 @@ func (s tupleSet) slice() []common.KeyScoreMember {
 
 func (s tupleSet) orderedLimitedSlice(limit int) []common.KeyScoreMember {
 	a := s.slice()
-	sort.Sort(common.KeyScoreMembers(a))
+	sort.Sort(keyScoreMembers(a))
 	if len(a) > limit {
 		a = a[:limit]
 	}
 	return a
 }
 
-type keyMemberSet map[keyMember]struct{}
+type keyScoreMembers []common.KeyScoreMember
 
-func (s keyMemberSet) add(km keyMember) {
-	s[km] = struct{}{}
+func (a keyScoreMembers) Len() int           { return len(a) }
+func (a keyScoreMembers) Less(i, j int) bool { return a[i].Score > a[j].Score }
+func (a keyScoreMembers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+type keyMemberSet map[common.KeyMember]struct{}
+
+func (s keyMemberSet) add(keyMember common.KeyMember) {
+	s[keyMember] = struct{}{}
 }
 
 func (s keyMemberSet) addMany(other keyMemberSet) {
-	for km := range other {
-		s.add(km)
+	for keyMember := range other {
+		s.add(keyMember)
 	}
 }
 
-func (s keyMemberSet) slice() []keyMember {
-	a := make([]keyMember, 0, len(s))
-	for km := range s {
-		a = append(a, km)
+func (s keyMemberSet) slice() []common.KeyMember {
+	a := make([]common.KeyMember, 0, len(s))
+	for keyMember := range s {
+		a = append(a, keyMember)
 	}
 	return a
 }

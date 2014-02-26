@@ -24,7 +24,7 @@ func TestAllRepairs(t *testing.T) {
 
 	// Pre-repair, we should have divergent view.
 	for i := 0; i < n; i++ {
-		t.Logf("pre-repair: cluster %d: %+v", i, clusters[i].(*mockCluster).m)
+		//t.Logf("pre-repair: cluster %d: %+v", i, clusters[i].(*mockCluster).m)
 		expected := first
 		if i == 0 {
 			expected = second
@@ -35,13 +35,12 @@ func TestAllRepairs(t *testing.T) {
 	}
 
 	// Issue repair.
-	AllRepairs(clusters, instrumentation.NopInstrumentation{})([]keyMember{keyMember{Key: "foo", Member: "bar"}})
-	runtime.Gosched()
+	AllRepairs(clusters, instrumentation.NopInstrumentation{})([]common.KeyMember{common.KeyMember{Key: "foo", Member: "bar"}})
 
 	// Post-repair, we should have perfect agreement on the correct value.
 	expected := second
 	for i := 0; i < n; i++ {
-		t.Logf("post-repair: cluster %d: %+v", i, clusters[i].(*mockCluster).m)
+		//t.Logf("post-repair: cluster %d: %+v", i, clusters[i].(*mockCluster).m)
 		if got := <-clusters[i].Select([]string{"foo"}, 0, 10); !reflect.DeepEqual(expected, got.KeyScoreMembers[0]) {
 			t.Errorf("post-repair: cluster %d: expected %+v, got %+v", i, expected, got.KeyScoreMembers[0])
 		}
@@ -70,10 +69,10 @@ func TestRateLimitedRepairs(t *testing.T) {
 
 	// Perform all repairs as fast as possible.
 	maxRepairsPerSecond := 2
-	repairFunc := RateLimitedRepairs(maxRepairsPerSecond)(clusters, instrumentation.NopInstrumentation{})
-	repairFunc([]keyMember{keyMember{Key: "foo", Member: "alpha"}}) // should succeed
-	repairFunc([]keyMember{keyMember{Key: "foo", Member: "beta"}})  // should succeed
-	repairFunc([]keyMember{keyMember{Key: "foo", Member: "delta"}}) // should fail
+	repairFunc := RateLimited(maxRepairsPerSecond, AllRepairs)(clusters, instrumentation.NopInstrumentation{})
+	repairFunc([]common.KeyMember{common.KeyMember{Key: "foo", Member: "alpha"}}) // should succeed
+	repairFunc([]common.KeyMember{common.KeyMember{Key: "foo", Member: "beta"}})  // should succeed
+	repairFunc([]common.KeyMember{common.KeyMember{Key: "foo", Member: "delta"}}) // should fail
 
 	// Make post-repair checks. We only care about clusters 1 and above.
 	expected := []common.KeyScoreMember{e, d, c}
