@@ -124,12 +124,13 @@ func SendAllReadAll(farm *Farm) coreReadStrategy {
 			repairs.addMany(difference)
 		}
 
-		// Issue read repairs on the difference set.
+		// Issue read repairs on the difference set. Note that repairs are by
+		// default blocking. If you want nonblocking repairs, as you probably
+		// do in a production server, be sure to wrap your RepairStrategy in
+		// Nonblocking!
 		if len(repairs) > 0 {
-			go func() {
-				farm.instrumentation.SelectRepairNeeded(len(repairs))
-				farm.repairStrategy(repairs.slice())
-			}()
+			farm.instrumentation.SelectRepairNeeded(len(repairs))
+			farm.repairStrategy(repairs.slice())
 		}
 
 		// Kapow!
@@ -395,10 +396,10 @@ func min(d1, d2 time.Duration) time.Duration {
 	return min
 }
 
-func ksms2kms(ksms []common.KeyScoreMember) []keyMember {
-	kms := make([]keyMember, len(ksms))
+func ksms2kms(ksms []common.KeyScoreMember) []common.KeyMember {
+	kms := make([]common.KeyMember, len(ksms))
 	for i := range ksms {
-		kms[i] = keyMember{
+		kms[i] = common.KeyMember{
 			Key:    ksms[i].Key,
 			Member: ksms[i].Member,
 		}

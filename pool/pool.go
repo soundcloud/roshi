@@ -2,6 +2,7 @@
 package pool
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
@@ -86,6 +87,15 @@ func (p *Pool) WithIndex(index int, do func(redis.Conn) error) error {
 // simple/single Redis requests on a single key.
 func (p *Pool) With(key string, do func(redis.Conn) error) error {
 	return p.WithIndex(p.Index(key), do)
+}
+
+// ID returns a unique identifier for the Redis instance represented by index,
+// or an error if the index is invalid.
+func (p *Pool) ID(index int) string {
+	if index < 0 || index > len(p.connections) {
+		return fmt.Sprintf("invalid index %d", index)
+	}
+	return p.connections[index].address
 }
 
 // Close closes all available (idle) connections in the cluster.

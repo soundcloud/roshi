@@ -2,7 +2,6 @@ package farm
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"sort"
 	"sync/atomic"
@@ -71,7 +70,7 @@ func TestMockCluster(t *testing.T) {
 // mockCluster is *not* safe for concurrent use.
 type mockCluster struct {
 	id                int32
-	m                 map[string]common.KeyScoreMembers
+	m                 map[string]map[string]float64 // key: member: score
 	failing           bool
 	countInsert       int32
 	countSelect       int32
@@ -86,31 +85,37 @@ var mockClusterIDs int32
 func newMockCluster() *mockCluster {
 	return &mockCluster{
 		id: atomic.AddInt32(&mockClusterIDs, 1),
-		m:  map[string]common.KeyScoreMembers{},
+		m:  map[string]map[string]float64{},
 	}
 }
 
 func newFailingMockCluster() *mockCluster {
 	return &mockCluster{
-		m:       map[string]common.KeyScoreMembers{},
+		m:       map[string]map[string]float64{},
 		failing: true,
 	}
 }
 
-func (c *mockCluster) Insert(tuples []common.KeyScoreMember) error {
+func (c *mockCluster) Insert(keyScoreMembers []common.KeyScoreMember) error {
 	atomic.AddInt32(&c.countInsert, 1)
 	if c.failing {
 		return errors.New("failtown, population you")
 	}
-	for _, tuple := range tuples {
-		a := c.m[tuple.Key]
-		a = append(c.m[tuple.Key], common.KeyScoreMember{
-			Key:    tuple.Key,
-			Score:  tuple.Score,
-			Member: tuple.Member,
-		})
-		sort.Sort(a)
-		c.m[tuple.Key] = a
+
+	for _, keyScoreMember := range keyScoreMembers {
+		members, ok := c.m[keyScoreMember.Key]
+		if !ok {
+			// first insert for this key
+			c.m[keyScoreMember.Key] = map[string]float64{keyScoreMember.Member: keyScoreMember.Score}
+			continue
+		}
+		score, ok := members[keyScoreMember.Member]
+		if ok && keyScoreMember.Score <= score {
+			// existing member has a better score
+			continue
+		}
+		// existing member doesn't exist or has a lower score
+		c.m[keyScoreMember.Key][keyScoreMember.Member] = keyScoreMember.Score
 	}
 	return nil
 }
@@ -128,87 +133,131 @@ func (c *mockCluster) Select(keys []string, offset, limit int) <-chan cluster.El
 			close(ch)
 			atomic.AddInt32(&c.countOpenChannels, -1)
 		}()
+
 		for _, key := range keys {
-			ksms := c.m[key]
-			if len(ksms) <= offset {
+			members, ok := c.m[key]
+			if !ok {
 				ch <- cluster.Element{Key: key, KeyScoreMembers: []common.KeyScoreMember{}}
 				continue
 			}
-			ksms = ksms[offset:]
-			if len(ksms) > limit {
-				ksms = ksms[:limit]
+
+			slice := members2slice(key, members)
+			if len(slice) <= offset {
+				ch <- cluster.Element{Key: key, KeyScoreMembers: []common.KeyScoreMember{}}
+				continue
 			}
-			ch <- cluster.Element{Key: key, KeyScoreMembers: uniqueMembers(ksms)}
+
+			slice = slice[offset:]
+			if len(slice) > limit {
+				slice = slice[:limit]
+			}
+			ch <- cluster.Element{Key: key, KeyScoreMembers: slice}
 		}
 	}()
 	return ch
 }
 
-func uniqueMembers(ksms common.KeyScoreMembers) common.KeyScoreMembers {
-	a := make(common.KeyScoreMembers, 0, len(ksms))
-	members := map[string]struct{}{}
-	for _, ksm := range ksms {
-		if _, ok := members[ksm.Member]; ok {
-			continue
-		}
-		a = append(a, ksm)
-		members[ksm.Member] = struct{}{}
+func members2slice(key string, members map[string]float64) []common.KeyScoreMember {
+	a := scoreMemberSlice{}
+	for member, score := range members {
+		a = append(a, scoreMember{score, member})
 	}
-	return a
+	sort.Sort(a)
+
+	keyScoreMembers := make([]common.KeyScoreMember, len(a))
+	for i := range a {
+		keyScoreMembers[i] = common.KeyScoreMember{
+			Key:    key,
+			Score:  a[i].score,
+			Member: a[i].member,
+		}
+	}
+	return keyScoreMembers
 }
 
-func (c *mockCluster) Delete(tuples []common.KeyScoreMember) error {
+type scoreMember struct {
+	score  float64
+	member string
+}
+
+type scoreMemberSlice []scoreMember
+
+func (a scoreMemberSlice) Len() int           { return len(a) }
+func (a scoreMemberSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a scoreMemberSlice) Less(i, j int) bool { return a[i].score > a[j].score }
+
+func (c *mockCluster) Delete(keyScoreMembers []common.KeyScoreMember) error {
 	atomic.AddInt32(&c.countDelete, 1)
 	if c.failing {
 		return errors.New("failtown, population you")
 	}
-	for _, toDelete := range tuples {
-		for key, existingTuples := range c.m {
-			replacementTuples := []common.KeyScoreMember{}
-			for _, existingTuple := range existingTuples {
-				if existingTuple.Key == toDelete.Key && existingTuple.Member == toDelete.Member {
-					continue
-				}
-				replacementTuples = append(replacementTuples, existingTuple)
-			}
-			c.m[key] = replacementTuples
+
+	for _, toDelete := range keyScoreMembers {
+		members, ok := c.m[toDelete.Key]
+		if !ok {
+			// key doesn't exist
+			continue
 		}
+		score, ok := members[toDelete.Member]
+		if !ok {
+			// member doesn't exist in key
+			continue
+		}
+		// Mock cluster allows deletes with same score!
+		// This is different than production to ease testing!
+		if toDelete.Score < score {
+			// incoming member has insufficient score
+			continue
+		}
+		delete(c.m[toDelete.Key], toDelete.Member)
 	}
 	return nil
 }
 
 // Score in this mock implementation will never return a score for
 // deleted entries.
-func (c *mockCluster) Score(key, member string) (float64, bool, error) {
+func (c *mockCluster) Score(keyMembers []common.KeyMember) (map[common.KeyMember]cluster.Presence, error) {
 	atomic.AddInt32(&c.countScore, 1)
 	if c.failing {
-		return 0, false, errors.New("failtown, population you")
+		return map[common.KeyMember]cluster.Presence{}, errors.New("failtown, population you")
 	}
-	tuples, ok := c.m[key]
-	if !ok {
-		return 0, false, fmt.Errorf("no member '%s' found for key '%s'", member, key)
-	}
-	for _, tuple := range tuples {
-		if tuple.Member == member {
-			return tuple.Score, true, nil
+
+	m := map[common.KeyMember]cluster.Presence{}
+	for _, keyMember := range keyMembers {
+		members, ok := c.m[keyMember.Key]
+		if !ok {
+			m[keyMember] = cluster.Presence{Present: false}
+			continue
+		}
+		score, ok := members[keyMember.Member]
+		if !ok {
+			m[keyMember] = cluster.Presence{Present: false}
+			continue
+		}
+		m[keyMember] = cluster.Presence{
+			Present:  true,
+			Inserted: true,
+			Score:    score,
 		}
 	}
-	return 0, false, fmt.Errorf("no member '%s' found for key '%s'", member, key)
+	return m, nil
 }
 
 func (c *mockCluster) Keys(batchSize int) <-chan []string {
 	atomic.AddInt32(&c.countKeys, 1)
-	ch := make(chan []string)
-	m := map[string]common.KeyScoreMembers{}
-	// Copy c.m so that at least after this method has returned,
+
+	// Copy keys from c.m, so that at least after this method has returned,
 	// we don't run into issues with concurrent modifications.
-	for k, v := range c.m {
-		m[k] = v
+	a := make([]string, 0, len(c.m))
+	for key := range c.m {
+		a = append(a, key)
 	}
+
+	ch := make(chan []string)
 	go func() {
 		defer close(ch)
 		batch := []string{}
-		for key := range m {
+		for _, key := range a {
 			batch = append(batch, key)
 			if len(batch) >= batchSize {
 				ch <- batch
@@ -223,7 +272,7 @@ func (c *mockCluster) Keys(batchSize int) <-chan []string {
 }
 
 func (c *mockCluster) clear() {
-	c.m = map[string]common.KeyScoreMembers{}
+	c.m = map[string]map[string]float64{}
 }
 
 func newMockClusters(n int) []cluster.Cluster {

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soundcloud/roshi/common"
 	"github.com/gorilla/pat"
+	"github.com/soundcloud/roshi/common"
 )
 
 func TestEvaluateScalarPercentage(t *testing.T) {
@@ -322,7 +322,7 @@ func newMockFarm() *mockFarm {
 func (f *mockFarm) Insert(tuples []common.KeyScoreMember) error {
 	for _, tuple := range tuples {
 		newTuples := append(f.m[tuple.Key], tuple)
-		sort.Sort(common.KeyScoreMembers(newTuples))
+		sort.Sort(keyScoreMembers(newTuples))
 		f.m[tuple.Key] = newTuples
 	}
 	return nil
