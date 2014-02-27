@@ -32,6 +32,7 @@ func TestRecovery(t *testing.T) {
 	if err != nil {
 		waitDuration = 100 * time.Millisecond
 	}
+	t.Logf("TEST_REDIS_WAIT_DURATION is %s", waitDuration)
 
 	func() {
 		// Start Redis
