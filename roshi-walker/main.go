@@ -1,3 +1,4 @@
+// roshi-walker walks the keyspace and performs repairing Selects.
 package main
 
 import (
