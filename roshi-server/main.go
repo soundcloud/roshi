@@ -25,7 +25,6 @@ import (
 	"github.com/soundcloud/roshi/farm"
 	"github.com/soundcloud/roshi/instrumentation/statsd"
 	"github.com/soundcloud/roshi/pool"
-	"github.com/streadway/handy/breaker"
 )
 
 var (
@@ -51,7 +50,6 @@ func main() {
 		statsdAddress              = flag.String("statsd.address", "", "Statsd address (blank to disable)")
 		statsdSampleRate           = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
 		statsdBucketPrefix         = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
-		httpCircuitBreaker         = flag.Bool("http.circuit.breaker", true, "Enable HTTP server circuit breaker")
 		httpAddress                = flag.String("http.address", ":6302", "HTTP listen address")
 	)
 	flag.Parse()
@@ -135,10 +133,6 @@ func main() {
 	r.Post("/", handleInsert(farm))
 	r.Delete("/", handleDelete(farm))
 	h := http.Handler(r)
-	if *httpCircuitBreaker {
-		log.Printf("using HTTP circuit breaker")
-		h = breaker.DefaultBreaker(h)
-	}
 
 	// Go for it.
 	log.Printf("listening on %s", *httpAddress)
