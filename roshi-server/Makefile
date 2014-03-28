@@ -1,4 +1,4 @@
-GOPATH := $(CURDIR)/../vendor:$(GOPATH)
+GOPATH := $(CURDIR)/../_vendor:$(GOPATH)
 
 all: build
 
