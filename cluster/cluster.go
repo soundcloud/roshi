@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
@@ -310,6 +311,16 @@ func (c *cluster) Keys(batchSize int) <-chan []string {
 	ch := make(chan []string)
 	go func() {
 		defer close(ch)
+
+		var sent uint64
+		t := time.NewTicker(1 * time.Second)
+		defer t.Stop()
+		go func() {
+			for _ = range t.C {
+				log.Printf("cluster: Keys: sent %d key(s) from all instances", atomic.LoadUint64(&sent))
+			}
+		}()
+
 		for _, index := range rand.Perm(c.pool.Size()) {
 			log.Printf("cluster: scanning keyspace of %q (batch size %d)", c.pool.ID(index), batchSize)
 			cursor := 0
@@ -341,6 +352,7 @@ func (c *cluster) Keys(batchSize int) <-chan []string {
 						if key[l:] == insertSuffix {
 							batch = append(batch, key[:l])
 							if len(batch) >= batchSize {
+								atomic.AddUint64(&sent, uint64(len(batch)))
 								ch <- batch
 								batch = make([]string, 0, batchSize)
 							}
