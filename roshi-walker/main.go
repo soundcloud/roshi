@@ -169,9 +169,12 @@ func walkOnce(
 	instr instrumentation.WalkInstrumentation,
 ) {
 	for batch := range src {
+		log.Printf("walk: received batch of %d, requesting tokens", len(batch))
 		throttle.wait(int64(len(batch)))
+		log.Printf("walk: received tokens, performing Select")
 		dst.Select(batch, 0, maxSize)
 		instr.WalkKeys(len(batch))
+		log.Printf("walk: performed Select, waiting for next batch")
 	}
 }
 
