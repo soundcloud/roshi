@@ -1,12 +1,13 @@
+GO ?= go
 GOPATH := $(CURDIR)/../_vendor:$(GOPATH)
 
 all: build
 
 build:
-	go build
+	$(GO) build
 
 clean:
-	go clean
+	$(GO) clean
 
 check:
-	@go list -f '{{join .Deps "\n"}}' | xargs go list -f '{{if not .Standard}}{{.ImportPath}} {{.Dir}}{{end}}' | column -t
+	@$(GO) list -f '{{join .Deps "\n"}}' | xargs $(GO) list -f '{{if not .Standard}}{{.ImportPath}} {{.Dir}}{{end}}' | column -t
