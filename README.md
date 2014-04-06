@@ -270,20 +270,7 @@ job with a relatively small surface area. From the bottom up...
 
 ## The big picture
 
-```
-+-roshi-server---------------------------------------------------------------+
-| +-Farm-------------------------------------------------------------------+ |
-| | +-Cluster------------+  +-Cluster------------+  +-Cluster------------+ | |
-| | | +-Pool-----------+ |  | +-Pool-----------+ |  | +-Pool-----------+ | | |
-| | | | Redis instance | |  | | Redis instance | |  | | Redis instance | | | |
-| | | | Redis instance | |  | | Redis instance | |  | | Redis instance | | | |
-| | | | Redis instance | |  | | Redis instance | |  | | Redis instance | | | |
-| | | | Redis instance | |  | | Redis instance | |  | | Redis instance | | | |
-| | | +----------------+ |  | +----------------+ |  | +----------------+ | | |
-| | +--------------------+  +--------------------+  +--------------------+ | |
-| +------------------------------------------------------------------------+ |
-+----------------------------------------------------------------------------+
-```
+![Overview](http://i.imgur.com/jHldKAH.png)
 
 (Clusters need not have the same number of Redis instances.)
 
