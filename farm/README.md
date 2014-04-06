@@ -122,4 +122,8 @@ consistency requirements with load on your infrastructure.
 
 ## Walking the keyspace
 
-TODO
+Inconsistent keys can only be repaired if they're read. To guard against long
+term data corruption, the [roshi- walker][walker] component is designed to
+continuously walk the keyspace to enforce data consistency.
+
+[walker]: https://github.com/soundcloud/roshi/blob/master/roshi-walker
