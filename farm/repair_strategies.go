@@ -52,7 +52,7 @@ func RateLimited(maxElementsPerSecond int, repairStrategy RepairStrategy) Repair
 	return func(clusters []cluster.Cluster, instr instrumentation.RepairInstrumentation) coreRepairStrategy {
 		permits := permitter(allowAllPermitter{})
 		if maxElementsPerSecond >= 0 {
-			permits = permitter(tokenBucketPermitter{tb.NewBucket(int64(maxElementsPerSecond), -1)})
+			permits = tokenBucketPermitter{tb.NewBucket(int64(maxElementsPerSecond), -1)}
 		}
 
 		return func(kms []common.KeyMember) {
