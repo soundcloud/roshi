@@ -21,6 +21,15 @@ consensus.
 
 [![Build Status](https://travis-ci.org/soundcloud/roshi.png)](https://travis-ci.org/soundcloud/roshi)
 
+# Use cases
+
+Roshi is basically a high-performance **index** for timestamped data. It's
+designed to sit in the critical (request) path of your application or service.
+The originating use case is the SoundCloud stream; see [this blog post][blog]
+for details.
+
+[blog]: http://developers.soundcloud.com/blog/roshi-a-crdt-system-for-timestamped-events
+
 # Theory and system properties
 
 Roshi is a distributed system, for two reasons: it's made for datasets that
