@@ -33,9 +33,9 @@ In pseudocode, that script is:
 
 ```
 bool valid(key, score, member):
-	if contains(key+, member) and score_of(key+, member) >= score:
+	if contains(key+, member) and score <= score_of(key+, member):
 	    return false
-	if contains(key-, member) and score_of(key-, member) >= score:
+	if contains(key-, member) and score <= score_of(key-, member):
 	    return false
 	return true
 

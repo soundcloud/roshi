@@ -90,9 +90,9 @@ var (
 
 		local insertTs = redis.call('ZSCORE', KEYS[1] .. 'INSERTSUFFIX', ARGV[2])
 		local deleteTs = redis.call('ZSCORE', KEYS[1] .. 'DELETESUFFIX', ARGV[2])
-		if insertTs and tonumber(ARGV[1]) < tonumber(insertTs) then
+		if insertTs and tonumber(ARGV[1]) <= tonumber(insertTs) then
 			return -1
-		elseif deleteTs and tonumber(ARGV[1]) < tonumber(deleteTs) then
+		elseif deleteTs and tonumber(ARGV[1]) <= tonumber(deleteTs) then
 			return -1
 		end
 
