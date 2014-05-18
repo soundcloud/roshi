@@ -1,6 +1,6 @@
 # vendor
 
-This directory holds vendored dependencies, managed via [git subtrees](0). All
+This directory holds vendored dependencies, managed via [git subtrees][0]. All
 management commands should be run from the top level of the repository. The
 blessed build procedure for the binaries (encoded in their Makefiles) makes use
 of this directory; normal development will use whichever version(s) are in your
