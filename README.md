@@ -189,6 +189,8 @@ mean they should re-submit their operation. A write response of true does
 readers, merely that it was accepted and processed according to CRDT
 semantics.
 
+As an example, all of these write operations would return true.
+
 Write operation         | Final state           |
 ------------------------|-----------------------|---------------
 Insert("foo", 3, "bar") | foo+ bar/3<br/>foo- — | Initial write
