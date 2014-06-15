@@ -35,7 +35,7 @@ for details.
 Roshi is a distributed system, for two reasons: it's made for datasets that
 don't fit on one machine, and it's made to be tolerant against node failure.
 
-Next, we will explain some of the design and properties of the system.
+Next, we will explain the system design.
 
 ## CRDT
 
@@ -87,21 +87,20 @@ A(elements...) is the state of the add set. R(elements...) is the state of
 the remove set. An element is a tuple with (value, timestamp). add(element)
 and remove(element) are the operations.
 
-    A(a,1) R() + add(a,0)    = A(a,1) R()
-    A(a,1) R() + add(a,1)    = A(a,1) R()
-    A(a,1) R() + add(a,2)    = A(a,2) R()
-
-    A(a,1) R() + remove(a,0) = A(a,1) R()
-    A(a,1) R() + remove(a,1) = A(a,1) R()
-    A(a,1) R() + remove(a,2) = A() R(a,2)
-
-    A() R(a,1) + add(a,0)    = A() R(a,1)
-    A() R(a,1) + add(a,1)    = A() R(a,1)
-    A() R(a,1) + add(a,2)    = A(a,2) R()
-
-    A() R(a,1) + remove(a,0) = A() R(a,1)
-    A() R(a,1) + remove(a,1) = A() R(a,1)
-    A() R(a,1) + remove(a,2) = A() R(a,2)
+Original state | Operation   | Resulting state
+---------------|-------------|-----------------
+A(a,1) R()     | add(a,0)    | A(a,1) R()
+A(a,1) R()     | add(a,1)    | A(a,1) R()
+A(a,1) R()     | add(a,2)    | A(a,2) R()
+A(a,1) R()     | remove(a,0) | A(a,1) R()
+A(a,1) R()     | remove(a,1) | A(a,1) R()
+A(a,1) R()     | remove(a,2) | A() R(a,2)
+A() R(a,1)     | add(a,0)    | A() R(a,1)
+A() R(a,1)     | add(a,1)    | A() R(a,1)
+A() R(a,1)     | add(a,2)    | A(a,2) R()
+A() R(a,1)     | remove(a,0) | A() R(a,1)
+A() R(a,1)     | remove(a,1) | A() R(a,1)
+A() R(a,1)     | remove(a,2) | A() R(a,2)
 
 An element will always be in either the add or the remove set exclusively, but
 never in both and never more than once. This means that the logical set S is
@@ -179,6 +178,24 @@ instance, there are two options:
 
 Both processes can be expedited via a [keyspace walker process][roshi-walker].
 Nevertheless, these properties and procedures warrant careful consideration.
+
+## Responses to write operations
+
+Write operations (insert or delete) return boolean to indicate whether the
+operation was successfully applied to the data layer, respecting the
+configured write quorum. Clients should interpret a write response of false to
+mean they should re-submit their operation. A write response of true does
+**not** imply the operation mutated the state in a way that will be visible to
+readers, merely that it was accepted and processed according to CRDT
+semantics.
+
+Write operation         | Final state           |
+------------------------|-----------------------|---------------
+Insert("foo", 3, "bar") | foo+ bar/3<br/>foo- — | Initial write
+Insert("foo", 3, "bar") | foo+ bar/3<br/>foo- — | No-op: incoming score doesn't beat existing score
+Delete("foo", 2, "bar") | foo+ bar/3<br/>foo- — | No-op: incoming score doesn't beat existing score
+Delete("foo", 4, "bar") | foo+ —<br/>foo- bar/4 | "bar" moves from add set to remove set
+Delete("foo", 5, "bar") | foo+ —<br/>foo- bar/5 | score of "bar" in remove set is incremented
 
 ## Considerations
 
