@@ -6,7 +6,7 @@ import (
 	_ "expvar"
 	"flag"
 	"fmt"
-	logpkg "log"
+	"log"
 	"math"
 	"net/http"
 	_ "net/http/pprof"
@@ -29,7 +29,6 @@ import (
 
 var (
 	stats = g2s.Noop()
-	log   = logpkg.New(os.Stdout, "", logpkg.Lmicroseconds)
 )
 
 func main() {
@@ -53,6 +52,8 @@ func main() {
 		httpAddress                = flag.String("http.address", ":6302", "HTTP listen address")
 	)
 	flag.Parse()
+	log.SetOutput(os.Stdout)
+	log.SetFlags(log.Lmicroseconds)
 	log.Printf("GOMAXPROCS %d", runtime.GOMAXPROCS(-1))
 
 	// Set up statsd instrumentation, if it's specified.

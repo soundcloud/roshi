@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ func main() {
 		httpAddress         = flag.String("http.address", ":6060", "HTTP listen address (profiling endpoints only)")
 	)
 	flag.Parse()
+	log.SetOutput(os.Stdout)
 	log.SetFlags(log.Lmicroseconds)
 
 	// Validate integer arguments.
