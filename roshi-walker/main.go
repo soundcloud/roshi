@@ -16,6 +16,7 @@ import (
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/farm"
 	"github.com/soundcloud/roshi/instrumentation"
+	"github.com/soundcloud/roshi/instrumentation/prometheus"
 	"github.com/soundcloud/roshi/instrumentation/statsd"
 	"github.com/soundcloud/roshi/pool"
 	"github.com/tsenart/tb"
@@ -52,16 +53,19 @@ func main() {
 		log.Fatal("max keys per second should be bigger than batch size")
 	}
 
-	// Set up statsd instrumentation, if it's specified.
-	stats := g2s.Noop()
+	// Set up instrumentation.
+	statter := g2s.Noop()
 	if *statsdAddress != "" {
 		var err error
-		stats, err = g2s.Dial("udp", *statsdAddress)
+		statter, err = g2s.Dial("udp", *statsdAddress)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
-	instr := statsd.New(stats, float32(*statsdSampleRate), *statsdBucketPrefix)
+	instr := instrumentation.NewMultiInstrumentation(
+		statsd.New(statter, float32(*statsdSampleRate), *statsdBucketPrefix),
+		prometheus.New(""),
+	)
 
 	// Parse hash function.
 	var hashFunc func(string) uint32

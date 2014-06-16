@@ -23,12 +23,10 @@ import (
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/farm"
+	"github.com/soundcloud/roshi/instrumentation"
+	"github.com/soundcloud/roshi/instrumentation/prometheus"
 	"github.com/soundcloud/roshi/instrumentation/statsd"
 	"github.com/soundcloud/roshi/pool"
-)
-
-var (
-	stats = g2s.Noop()
 )
 
 func main() {
@@ -57,13 +55,18 @@ func main() {
 	log.Printf("GOMAXPROCS %d", runtime.GOMAXPROCS(-1))
 
 	// Set up statsd instrumentation, if it's specified.
+	statter := g2s.Noop()
 	if *statsdAddress != "" {
 		var err error
-		stats, err = g2s.Dial("udp", *statsdAddress)
+		statter, err = g2s.Dial("udp", *statsdAddress)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
+	instr := instrumentation.NewMultiInstrumentation(
+		statsd.New(statter, float32(*statsdSampleRate), *statsdBucketPrefix),
+		prometheus.New(""),
+	)
 
 	// Parse read strategy.
 	var readStrategy farm.ReadStrategy
@@ -120,8 +123,7 @@ func main() {
 		readStrategy,
 		repairStrategy,
 		*maxSize,
-		*statsdSampleRate,
-		*statsdBucketPrefix,
+		instr,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -149,12 +151,8 @@ func newFarm(
 	readStrategy farm.ReadStrategy,
 	repairStrategy farm.RepairStrategy,
 	maxSize int,
-	statsdSampleRate float64,
-	bucketPrefix string,
+	instr instrumentation.Instrumentation,
 ) (*farm.Farm, error) {
-	// Build instrumentation.
-	instr := statsd.New(stats, float32(statsdSampleRate), bucketPrefix)
-
 	// Parse out and build clusters.
 	clusters := []cluster.Cluster{}
 	for i, clusterInstances := range strings.Split(redisInstances, ";") {
