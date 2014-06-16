@@ -3,6 +3,7 @@
 package prometheus
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -10,9 +11,10 @@ import (
 )
 
 // Satisfaction guaranteed.
-var _ instrumentation.Instrumentation = prometheusInstrumentation{}
+var _ instrumentation.Instrumentation = PrometheusInstrumentation{}
 
-type prometheusInstrumentation struct {
+// PrometheusInstrumentation holds metrics for all instrumented methods.
+type PrometheusInstrumentation struct {
 	insertCallCount             prometheus.Counter
 	insertRecordCount           prometheus.Counter
 	insertCallDuration          prometheus.Histogram
@@ -46,8 +48,8 @@ type prometheusInstrumentation struct {
 // New returns a new Instrumentation that prints metrics to the passed
 // io.Writer. All metrics are prefixed with an appropriate bucket name, and
 // take the form e.g. "insert.record.count 10".
-func New(prefix string) instrumentation.Instrumentation {
-	i := prometheusInstrumentation{
+func New(prefix string) PrometheusInstrumentation {
+	i := PrometheusInstrumentation{
 		insertCallCount:             prometheus.NewCounter(),
 		insertRecordCount:           prometheus.NewCounter(),
 		insertCallDuration:          prometheus.NewDefaultHistogram(),
@@ -250,114 +252,147 @@ func New(prefix string) instrumentation.Instrumentation {
 	return i
 }
 
-func (i prometheusInstrumentation) InsertCall() {
+// Install installs the Prometheus handlers, so the metrics are available.
+func (i PrometheusInstrumentation) Install(pattern string, mux *http.ServeMux) {
+	mux.Handle(pattern, prometheus.DefaultHandler)
+}
+
+// InsertCall satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) InsertCall() {
 	i.insertCallCount.Increment(prometheus.NilLabels)
 }
 
-func (i prometheusInstrumentation) InsertRecordCount(n int) {
+// InsertRecordCount satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) InsertRecordCount(n int) {
 	i.insertRecordCount.IncrementBy(prometheus.NilLabels, float64(n))
 }
 
-func (i prometheusInstrumentation) InsertCallDuration(d time.Duration) {
+// InsertCallDuration satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) InsertCallDuration(d time.Duration) {
 	i.insertCallDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
 }
 
-func (i prometheusInstrumentation) InsertRecordDuration(d time.Duration) {
+// InsertRecordDuration satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) InsertRecordDuration(d time.Duration) {
 	i.insertRecordDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
 }
 
-func (i prometheusInstrumentation) InsertQuorumFailure() {
+// InsertQuorumFailure satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) InsertQuorumFailure() {
 	i.insertQuorumFailureCount.Increment(prometheus.NilLabels)
 }
 
-func (i prometheusInstrumentation) SelectCall() {
+// SelectCall satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectCall() {
 	i.selectCallCount.Increment(prometheus.NilLabels)
 }
 
-func (i prometheusInstrumentation) SelectKeys(n int) {
+// SelectKeys satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectKeys(n int) {
 	i.selectKeysCount.IncrementBy(prometheus.NilLabels, float64(n))
 }
 
-func (i prometheusInstrumentation) SelectSendTo(n int) {
+// SelectSendTo satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectSendTo(n int) {
 	i.selectSendToCount.IncrementBy(prometheus.NilLabels, float64(n))
 }
 
-func (i prometheusInstrumentation) SelectFirstResponseDuration(d time.Duration) {
+// SelectFirstResponseDuration satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectFirstResponseDuration(d time.Duration) {
 	i.selectFirstResponseDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
 }
 
-func (i prometheusInstrumentation) SelectPartialError() {
+// SelectPartialError satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectPartialError() {
 	i.selectPartialErrorCount.Increment(prometheus.NilLabels)
 }
 
-func (i prometheusInstrumentation) SelectBlockingDuration(d time.Duration) {
+// SelectBlockingDuration satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectBlockingDuration(d time.Duration) {
 	i.selectBlockingDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
 }
 
-func (i prometheusInstrumentation) SelectOverheadDuration(d time.Duration) {
+// SelectOverheadDuration satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectOverheadDuration(d time.Duration) {
 	i.selectOverheadDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
 }
 
-func (i prometheusInstrumentation) SelectDuration(d time.Duration) {
+// SelectDuration satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectDuration(d time.Duration) {
 	i.selectDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
 }
 
-func (i prometheusInstrumentation) SelectSendAllPromotion() {
+// SelectSendAllPromotion satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectSendAllPromotion() {
 	i.selectSendAllPromotionCount.Increment(prometheus.NilLabels)
 }
 
-func (i prometheusInstrumentation) SelectRetrieved(n int) {
+// SelectRetrieved satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectRetrieved(n int) {
 	i.selectRetrievedCount.IncrementBy(prometheus.NilLabels, float64(n))
 }
 
-func (i prometheusInstrumentation) SelectReturned(n int) {
+// SelectReturned satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectReturned(n int) {
 	i.selectReturnedCount.IncrementBy(prometheus.NilLabels, float64(n))
 }
 
-func (i prometheusInstrumentation) SelectRepairNeeded(n int) {
+// SelectRepairNeeded satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectRepairNeeded(n int) {
 	i.selectRepairNeededCount.IncrementBy(prometheus.NilLabels, float64(n))
 }
 
-func (i prometheusInstrumentation) DeleteCall() {
+// DeleteCall satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) DeleteCall() {
 	i.deleteCallCount.Increment(prometheus.NilLabels)
 }
 
-func (i prometheusInstrumentation) DeleteRecordCount(n int) {
+// DeleteRecordCount satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) DeleteRecordCount(n int) {
 	i.deleteRecordCount.IncrementBy(prometheus.NilLabels, float64(n))
 }
 
-func (i prometheusInstrumentation) DeleteCallDuration(d time.Duration) {
+// DeleteCallDuration satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) DeleteCallDuration(d time.Duration) {
 	i.deleteCallDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
 }
 
-func (i prometheusInstrumentation) DeleteRecordDuration(d time.Duration) {
+// DeleteRecordDuration satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) DeleteRecordDuration(d time.Duration) {
 	i.deleteRecordDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
 }
 
-func (i prometheusInstrumentation) DeleteQuorumFailure() {
+// DeleteQuorumFailure satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) DeleteQuorumFailure() {
 	i.deleteQuorumFailureCount.Increment(prometheus.NilLabels)
 }
 
-func (i prometheusInstrumentation) RepairCall() {
+// RepairCall satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) RepairCall() {
 	i.repairCallCount.Increment(prometheus.NilLabels)
 }
 
-func (i prometheusInstrumentation) RepairRequest(n int) {
+// RepairRequest satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) RepairRequest(n int) {
 	i.repairRequestCount.IncrementBy(prometheus.NilLabels, float64(n))
 }
 
-func (i prometheusInstrumentation) RepairDiscarded(n int) {
+// RepairDiscarded satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) RepairDiscarded(n int) {
 	i.repairDiscardedCount.IncrementBy(prometheus.NilLabels, float64(n))
 }
 
-func (i prometheusInstrumentation) RepairWriteSuccess(n int) {
+// RepairWriteSuccess satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) RepairWriteSuccess(n int) {
 	i.repairWriteSuccessCount.IncrementBy(prometheus.NilLabels, float64(n))
 }
 
-func (i prometheusInstrumentation) RepairWriteFailure(n int) {
+// RepairWriteFailure satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) RepairWriteFailure(n int) {
 	i.repairWriteFailureCount.IncrementBy(prometheus.NilLabels, float64(n))
 }
 
-func (i prometheusInstrumentation) WalkKeys(n int) {
+// WalkKeys satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) WalkKeys(n int) {
 	i.walkKeysCount.IncrementBy(prometheus.NilLabels, float64(n))
 }

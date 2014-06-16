@@ -63,9 +63,11 @@ func main() {
 			log.Fatal(err)
 		}
 	}
+	prometheusInstr := prometheus.New("roshiserver_")
+	prometheusInstr.Install("/metrics", http.DefaultServeMux)
 	instr := instrumentation.NewMultiInstrumentation(
 		statsd.New(statter, float32(*statsdSampleRate), *statsdBucketPrefix),
-		prometheus.New(""),
+		prometheusInstr,
 	)
 
 	// Parse read strategy.
@@ -131,6 +133,7 @@ func main() {
 
 	// Build the HTTP server.
 	r := pat.New()
+	r.Add("GET", "/metrics", http.DefaultServeMux)
 	r.Add("GET", "/debug", http.DefaultServeMux)
 	r.Get("/", handleSelect(farm))
 	r.Post("/", handleInsert(farm))

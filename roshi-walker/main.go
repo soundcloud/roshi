@@ -42,7 +42,7 @@ func main() {
 		statsdAddress       = flag.String("statsd.address", "", "Statsd address (blank to disable)")
 		statsdSampleRate    = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
 		statsdBucketPrefix  = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
-		httpAddress         = flag.String("http.address", ":6060", "HTTP listen address (profiling endpoints only)")
+		httpAddress         = flag.String("http.address", ":6060", "HTTP listen address (profiling/metrics endpoints only)")
 	)
 	flag.Parse()
 	log.SetOutput(os.Stdout)
@@ -62,9 +62,11 @@ func main() {
 			log.Fatal(err)
 		}
 	}
+	prometheusInstr := prometheus.New("")
+	prometheusInstr.Install("/metrics", http.DefaultServeMux)
 	instr := instrumentation.NewMultiInstrumentation(
 		statsd.New(statter, float32(*statsdSampleRate), *statsdBucketPrefix),
-		prometheus.New(""),
+		prometheusInstr,
 	)
 
 	// Parse hash function.
