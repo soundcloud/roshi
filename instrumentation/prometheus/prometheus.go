@@ -17,25 +17,25 @@ var _ instrumentation.Instrumentation = PrometheusInstrumentation{}
 type PrometheusInstrumentation struct {
 	insertCallCount             prometheus.Counter
 	insertRecordCount           prometheus.Counter
-	insertCallDuration          prometheus.Histogram
-	insertRecordDuration        prometheus.Histogram
+	insertCallDuration          prometheus.Summary
+	insertRecordDuration        prometheus.Summary
 	insertQuorumFailureCount    prometheus.Counter
 	selectCallCount             prometheus.Counter
 	selectKeysCount             prometheus.Counter
 	selectSendToCount           prometheus.Counter
-	selectFirstResponseDuration prometheus.Histogram
+	selectFirstResponseDuration prometheus.Summary
 	selectPartialErrorCount     prometheus.Counter
-	selectBlockingDuration      prometheus.Histogram
-	selectOverheadDuration      prometheus.Histogram
-	selectDuration              prometheus.Histogram
+	selectBlockingDuration      prometheus.Summary
+	selectOverheadDuration      prometheus.Summary
+	selectDuration              prometheus.Summary
 	selectSendAllPromotionCount prometheus.Counter
 	selectRetrievedCount        prometheus.Counter
 	selectReturnedCount         prometheus.Counter
 	selectRepairNeededCount     prometheus.Counter
 	deleteCallCount             prometheus.Counter
 	deleteRecordCount           prometheus.Counter
-	deleteCallDuration          prometheus.Histogram
-	deleteRecordDuration        prometheus.Histogram
+	deleteCallDuration          prometheus.Summary
+	deleteRecordDuration        prometheus.Summary
 	deleteQuorumFailureCount    prometheus.Counter
 	repairCallCount             prometheus.Counter
 	repairRequestCount          prometheus.Counter
@@ -50,349 +50,321 @@ type PrometheusInstrumentation struct {
 // take the form e.g. "insert.record.count 10".
 func New(prefix string) PrometheusInstrumentation {
 	i := PrometheusInstrumentation{
-		insertCallCount:             prometheus.NewCounter(),
-		insertRecordCount:           prometheus.NewCounter(),
-		insertCallDuration:          prometheus.NewDefaultHistogram(),
-		insertRecordDuration:        prometheus.NewDefaultHistogram(),
-		insertQuorumFailureCount:    prometheus.NewCounter(),
-		selectCallCount:             prometheus.NewCounter(),
-		selectKeysCount:             prometheus.NewCounter(),
-		selectSendToCount:           prometheus.NewCounter(),
-		selectFirstResponseDuration: prometheus.NewDefaultHistogram(),
-		selectPartialErrorCount:     prometheus.NewCounter(),
-		selectBlockingDuration:      prometheus.NewDefaultHistogram(),
-		selectOverheadDuration:      prometheus.NewDefaultHistogram(),
-		selectDuration:              prometheus.NewDefaultHistogram(),
-		selectSendAllPromotionCount: prometheus.NewCounter(),
-		selectRetrievedCount:        prometheus.NewCounter(),
-		selectReturnedCount:         prometheus.NewCounter(),
-		selectRepairNeededCount:     prometheus.NewCounter(),
-		deleteCallCount:             prometheus.NewCounter(),
-		deleteRecordCount:           prometheus.NewCounter(),
-		deleteCallDuration:          prometheus.NewDefaultHistogram(),
-		deleteRecordDuration:        prometheus.NewDefaultHistogram(),
-		deleteQuorumFailureCount:    prometheus.NewCounter(),
-		repairCallCount:             prometheus.NewCounter(),
-		repairRequestCount:          prometheus.NewCounter(),
-		repairDiscardedCount:        prometheus.NewCounter(),
-		repairWriteSuccessCount:     prometheus.NewCounter(),
-		repairWriteFailureCount:     prometheus.NewCounter(),
-		walkKeysCount:               prometheus.NewCounter(),
+		insertCallCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "insert_call_count",
+			Help:      "How many insert calls have been made.",
+		}),
+		insertRecordCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "insert_record_count",
+			Help:      "How many records have been inserted.",
+		}),
+		insertCallDuration: prometheus.NewSummary(prometheus.SummaryOpts{
+			Namespace: prefix,
+			Name:      "insert_call_duration_nanoseconds",
+			Help:      "Insert duration per-call.",
+		}),
+		insertRecordDuration: prometheus.NewSummary(prometheus.SummaryOpts{
+			Namespace: prefix,
+			Name:      "insert_record_duration_nanoseconds",
+			Help:      "Insert duration per-record.",
+		}),
+		insertQuorumFailureCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "insert_quorum_failure_count",
+			Help:      "Insert quorum failure count.",
+		}),
+		selectCallCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "select_call_count",
+			Help:      "How many select calls have been made.",
+		}),
+		selectKeysCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "select_keys_count",
+			Help:      "How many keys have been selected.",
+		}),
+		selectSendToCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "select_send_to_count",
+			Help:      "How many clusters have received select calls.",
+		}),
+		selectFirstResponseDuration: prometheus.NewSummary(prometheus.SummaryOpts{
+			Namespace: prefix,
+			Name:      "select_first_response_duration_nanoseconds",
+			Help:      "Select first response duration.",
+		}),
+		selectPartialErrorCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "select_partial_error_count",
+			Help:      "How many partial errors have occurred in selects.",
+		}),
+		selectBlockingDuration: prometheus.NewSummary(prometheus.SummaryOpts{
+			Namespace: prefix,
+			Name:      "select_blocking_duration_nanoseconds",
+			Help:      "Select blocking duration.",
+		}),
+		selectOverheadDuration: prometheus.NewSummary(prometheus.SummaryOpts{
+			Namespace: prefix,
+			Name:      "select_overhead_duration_nanoseconds",
+			Help:      "Select overhead duration.",
+		}),
+		selectDuration: prometheus.NewSummary(prometheus.SummaryOpts{
+			Namespace: prefix,
+			Name:      "select_duration_nanoseconds",
+			Help:      "Overall select duration.",
+		}),
+		selectSendAllPromotionCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "select_send_all_promotion_count",
+			Help:      "How many select requests were promoted to a send-all, in appropriate read strategies.",
+		}),
+		selectRetrievedCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "select_retrieved_count",
+			Help:      "How many key-score-member tuples have been retrieved from clusters by select calls.",
+		}),
+		selectReturnedCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "select_returned_count",
+			Help:      "How many key-score-member tuples have been returned to clients by select calls.",
+		}),
+		selectRepairNeededCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "select_repair_needed_count",
+			Help:      "How many repairs have been detected and requested by select calls.",
+		}),
+		deleteCallCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "delete_call_count",
+			Help:      "How many delete calls have been made.",
+		}),
+		deleteRecordCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "delete_record_count",
+			Help:      "How many records have been deleted in delete calls.",
+		}),
+		deleteCallDuration: prometheus.NewSummary(prometheus.SummaryOpts{
+			Namespace: prefix,
+			Name:      "delete_call_duration_nanoseconds",
+			Help:      "Delete duration, per-call.",
+		}),
+		deleteRecordDuration: prometheus.NewSummary(prometheus.SummaryOpts{
+			Namespace: prefix,
+			Name:      "delete_record_duration_nanoseconds",
+			Help:      "Delete duration, per-record.",
+		}),
+		deleteQuorumFailureCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "delete_quorum_failure_count",
+			Help:      "Delete quorum failure count.",
+		}),
+		repairCallCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "repair_call_count",
+			Help:      "How many repair calls have been made.",
+		}),
+		repairRequestCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "repair_request_count",
+			Help:      "How many key-member tuples have been repaired.",
+		}),
+		repairDiscardedCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "repair_discarded_count",
+			Help:      "How many repair calls have been discarded due to rate or buffer limits.",
+		}),
+		repairWriteSuccessCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "repair_write_success_count",
+			Help:      "Repair write success count.",
+		}),
+		repairWriteFailureCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "repair_write_failure_count",
+			Help:      "Repair write failure count.",
+		}),
+		walkKeysCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "walk_keys_count",
+			Help:      "How many keys have been walked by the walker process.",
+		}),
 	}
 
-	prometheus.Register(
-		prefix+"insert_call_count",
-		"How many insert calls have been made.",
-		prometheus.NilLabels,
-		i.insertCallCount,
-	)
-	prometheus.Register(
-		prefix+"insert_record_count",
-		"How many records have been inserted.",
-		prometheus.NilLabels,
-		i.insertRecordCount,
-	)
-	prometheus.Register(
-		prefix+"insert_call_duration_nanoseconds",
-		"Insert duration per-call.",
-		prometheus.NilLabels,
-		i.insertCallDuration,
-	)
-	prometheus.Register(
-		prefix+"insert_record_duration_nanoseconds",
-		"Insert duration per-record.",
-		prometheus.NilLabels,
-		i.insertRecordDuration,
-	)
-	prometheus.Register(
-		prefix+"insert_quorum_failure_count",
-		"Insert quorum failure count.",
-		prometheus.NilLabels,
-		i.insertQuorumFailureCount,
-	)
-	prometheus.Register(
-		prefix+"select_call_count",
-		"How many select calls have been made.",
-		prometheus.NilLabels,
-		i.selectCallCount,
-	)
-	prometheus.Register(
-		prefix+"select_keys_count",
-		"How many keys have been selected.",
-		prometheus.NilLabels,
-		i.selectKeysCount,
-	)
-	prometheus.Register(
-		prefix+"select_send_to_count",
-		"How many clusters have received select calls.",
-		prometheus.NilLabels,
-		i.selectSendToCount,
-	)
-	prometheus.Register(
-		prefix+"select_first_response_duration_nanoseconds",
-		"Select first response duration.",
-		prometheus.NilLabels,
-		i.selectFirstResponseDuration,
-	)
-	prometheus.Register(
-		prefix+"select_partial_error_count",
-		"How many partial errors have occurred in selects.",
-		prometheus.NilLabels,
-		i.selectPartialErrorCount,
-	)
-	prometheus.Register(
-		prefix+"select_blocking_duration_nanoseconds",
-		"Select blocking duration.",
-		prometheus.NilLabels,
-		i.selectBlockingDuration,
-	)
-	prometheus.Register(
-		prefix+"select_overhead_duration_nanoseconds",
-		"Select overhead duration.",
-		prometheus.NilLabels,
-		i.selectOverheadDuration,
-	)
-	prometheus.Register(
-		prefix+"select_duration_nanoseconds",
-		"Overall select duration.",
-		prometheus.NilLabels,
-		i.selectDuration,
-	)
-	prometheus.Register(
-		prefix+"select_send_all_promotion_count",
-		"How many select requests were promoted to a send-all, in appropriate read strategies.",
-		prometheus.NilLabels,
-		i.selectSendAllPromotionCount,
-	)
-	prometheus.Register(
-		prefix+"select_retrieved_count",
-		"How many key-score-member tuples have been retrieved from clusters by select calls.",
-		prometheus.NilLabels,
-		i.selectRetrievedCount,
-	)
-	prometheus.Register(
-		prefix+"select_returned_count",
-		"How many key-score-member tuples have been returned to clients by select calls.",
-		prometheus.NilLabels,
-		i.selectReturnedCount,
-	)
-	prometheus.Register(
-		prefix+"select_repair_needed_count",
-		"How many repairs have been detected and requested by select calls.",
-		prometheus.NilLabels,
-		i.selectRepairNeededCount,
-	)
-	prometheus.Register(
-		prefix+"delete_call_count",
-		"How many delete calls have been made.",
-		prometheus.NilLabels,
-		i.deleteCallCount,
-	)
-	prometheus.Register(
-		prefix+"delete_record_count",
-		"How many records have been deleted in delete calls.",
-		prometheus.NilLabels,
-		i.deleteRecordCount,
-	)
-	prometheus.Register(
-		prefix+"delete_call_duration_nanoseconds",
-		"Delete duration, per-call.",
-		prometheus.NilLabels,
-		i.deleteCallDuration,
-	)
-	prometheus.Register(
-		prefix+"delete_record_duration_nanoseconds",
-		"Delete duration, per-record.",
-		prometheus.NilLabels,
-		i.deleteRecordDuration,
-	)
-	prometheus.Register(
-		prefix+"delete_quorum_failure_count",
-		"Delete quorum failure count.",
-		prometheus.NilLabels,
-		i.deleteQuorumFailureCount,
-	)
-	prometheus.Register(
-		prefix+"repair_call_count",
-		"How many repair calls have been made.",
-		prometheus.NilLabels,
-		i.repairCallCount,
-	)
-	prometheus.Register(
-		prefix+"repair_request_count",
-		"How many key-member tuples have been repaired.",
-		prometheus.NilLabels,
-		i.repairRequestCount,
-	)
-	prometheus.Register(
-		prefix+"repair_discarded_count",
-		"How many repair calls have been discarded due to rate or buffer limits.",
-		prometheus.NilLabels,
-		i.repairDiscardedCount,
-	)
-	prometheus.Register(
-		prefix+"repair_write_success_count",
-		"Repair write success count.",
-		prometheus.NilLabels,
-		i.repairWriteSuccessCount,
-	)
-	prometheus.Register(
-		prefix+"repair_write_failure_count",
-		"Repair write failure count.",
-		prometheus.NilLabels,
-		i.repairWriteFailureCount,
-	)
-	prometheus.Register(
-		prefix+"walk_keys_count",
-		"How many keys have been walked by the walker process.",
-		prometheus.NilLabels,
-		i.walkKeysCount,
-	)
+	prometheus.MustRegister(i.insertCallCount)
+	prometheus.MustRegister(i.insertRecordCount)
+	prometheus.MustRegister(i.insertCallDuration)
+	prometheus.MustRegister(i.insertRecordDuration)
+	prometheus.MustRegister(i.insertQuorumFailureCount)
+	prometheus.MustRegister(i.selectCallCount)
+	prometheus.MustRegister(i.selectKeysCount)
+	prometheus.MustRegister(i.selectSendToCount)
+	prometheus.MustRegister(i.selectFirstResponseDuration)
+	prometheus.MustRegister(i.selectPartialErrorCount)
+	prometheus.MustRegister(i.selectBlockingDuration)
+	prometheus.MustRegister(i.selectOverheadDuration)
+	prometheus.MustRegister(i.selectDuration)
+	prometheus.MustRegister(i.selectSendAllPromotionCount)
+	prometheus.MustRegister(i.selectRetrievedCount)
+	prometheus.MustRegister(i.selectReturnedCount)
+	prometheus.MustRegister(i.selectRepairNeededCount)
+	prometheus.MustRegister(i.deleteCallCount)
+	prometheus.MustRegister(i.deleteRecordCount)
+	prometheus.MustRegister(i.deleteCallDuration)
+	prometheus.MustRegister(i.deleteRecordDuration)
+	prometheus.MustRegister(i.deleteQuorumFailureCount)
+	prometheus.MustRegister(i.repairCallCount)
+	prometheus.MustRegister(i.repairRequestCount)
+	prometheus.MustRegister(i.repairDiscardedCount)
+	prometheus.MustRegister(i.repairWriteSuccessCount)
+	prometheus.MustRegister(i.repairWriteFailureCount)
+	prometheus.MustRegister(i.walkKeysCount)
 
 	return i
 }
 
 // Install installs the Prometheus handlers, so the metrics are available.
 func (i PrometheusInstrumentation) Install(pattern string, mux *http.ServeMux) {
-	mux.Handle(pattern, prometheus.DefaultHandler)
+	mux.Handle(pattern, prometheus.Handler())
 }
 
 // InsertCall satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) InsertCall() {
-	i.insertCallCount.Increment(prometheus.NilLabels)
+	i.insertCallCount.Inc()
 }
 
 // InsertRecordCount satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) InsertRecordCount(n int) {
-	i.insertRecordCount.IncrementBy(prometheus.NilLabels, float64(n))
+	i.insertRecordCount.Add(float64(n))
 }
 
 // InsertCallDuration satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) InsertCallDuration(d time.Duration) {
-	i.insertCallDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
+	i.insertCallDuration.Observe(float64(d.Nanoseconds()))
 }
 
 // InsertRecordDuration satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) InsertRecordDuration(d time.Duration) {
-	i.insertRecordDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
+	i.insertRecordDuration.Observe(float64(d.Nanoseconds()))
 }
 
 // InsertQuorumFailure satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) InsertQuorumFailure() {
-	i.insertQuorumFailureCount.Increment(prometheus.NilLabels)
+	i.insertQuorumFailureCount.Inc()
 }
 
 // SelectCall satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectCall() {
-	i.selectCallCount.Increment(prometheus.NilLabels)
+	i.selectCallCount.Inc()
 }
 
 // SelectKeys satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectKeys(n int) {
-	i.selectKeysCount.IncrementBy(prometheus.NilLabels, float64(n))
+	i.selectKeysCount.Add(float64(n))
 }
 
 // SelectSendTo satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectSendTo(n int) {
-	i.selectSendToCount.IncrementBy(prometheus.NilLabels, float64(n))
+	i.selectSendToCount.Add(float64(n))
 }
 
 // SelectFirstResponseDuration satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectFirstResponseDuration(d time.Duration) {
-	i.selectFirstResponseDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
+	i.selectFirstResponseDuration.Observe(float64(d.Nanoseconds()))
 }
 
 // SelectPartialError satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectPartialError() {
-	i.selectPartialErrorCount.Increment(prometheus.NilLabels)
+	i.selectPartialErrorCount.Inc()
 }
 
 // SelectBlockingDuration satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectBlockingDuration(d time.Duration) {
-	i.selectBlockingDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
+	i.selectBlockingDuration.Observe(float64(d.Nanoseconds()))
 }
 
 // SelectOverheadDuration satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectOverheadDuration(d time.Duration) {
-	i.selectOverheadDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
+	i.selectOverheadDuration.Observe(float64(d.Nanoseconds()))
 }
 
 // SelectDuration satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectDuration(d time.Duration) {
-	i.selectDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
+	i.selectDuration.Observe(float64(d.Nanoseconds()))
 }
 
 // SelectSendAllPromotion satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectSendAllPromotion() {
-	i.selectSendAllPromotionCount.Increment(prometheus.NilLabels)
+	i.selectSendAllPromotionCount.Inc()
 }
 
 // SelectRetrieved satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectRetrieved(n int) {
-	i.selectRetrievedCount.IncrementBy(prometheus.NilLabels, float64(n))
+	i.selectRetrievedCount.Add(float64(n))
 }
 
 // SelectReturned satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectReturned(n int) {
-	i.selectReturnedCount.IncrementBy(prometheus.NilLabels, float64(n))
+	i.selectReturnedCount.Add(float64(n))
 }
 
 // SelectRepairNeeded satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectRepairNeeded(n int) {
-	i.selectRepairNeededCount.IncrementBy(prometheus.NilLabels, float64(n))
+	i.selectRepairNeededCount.Add(float64(n))
 }
 
 // DeleteCall satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) DeleteCall() {
-	i.deleteCallCount.Increment(prometheus.NilLabels)
+	i.deleteCallCount.Inc()
 }
 
 // DeleteRecordCount satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) DeleteRecordCount(n int) {
-	i.deleteRecordCount.IncrementBy(prometheus.NilLabels, float64(n))
+	i.deleteRecordCount.Add(float64(n))
 }
 
 // DeleteCallDuration satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) DeleteCallDuration(d time.Duration) {
-	i.deleteCallDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
+	i.deleteCallDuration.Observe(float64(d.Nanoseconds()))
 }
 
 // DeleteRecordDuration satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) DeleteRecordDuration(d time.Duration) {
-	i.deleteRecordDuration.Add(prometheus.NilLabels, float64(d.Nanoseconds()))
+	i.deleteRecordDuration.Observe(float64(d.Nanoseconds()))
 }
 
 // DeleteQuorumFailure satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) DeleteQuorumFailure() {
-	i.deleteQuorumFailureCount.Increment(prometheus.NilLabels)
+	i.deleteQuorumFailureCount.Inc()
 }
 
 // RepairCall satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) RepairCall() {
-	i.repairCallCount.Increment(prometheus.NilLabels)
+	i.repairCallCount.Inc()
 }
 
 // RepairRequest satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) RepairRequest(n int) {
-	i.repairRequestCount.IncrementBy(prometheus.NilLabels, float64(n))
+	i.repairRequestCount.Add(float64(n))
 }
 
 // RepairDiscarded satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) RepairDiscarded(n int) {
-	i.repairDiscardedCount.IncrementBy(prometheus.NilLabels, float64(n))
+	i.repairDiscardedCount.Add(float64(n))
 }
 
 // RepairWriteSuccess satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) RepairWriteSuccess(n int) {
-	i.repairWriteSuccessCount.IncrementBy(prometheus.NilLabels, float64(n))
+	i.repairWriteSuccessCount.Add(float64(n))
 }
 
 // RepairWriteFailure satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) RepairWriteFailure(n int) {
-	i.repairWriteFailureCount.IncrementBy(prometheus.NilLabels, float64(n))
+	i.repairWriteFailureCount.Add(float64(n))
 }
 
 // WalkKeys satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) WalkKeys(n int) {
-	i.walkKeysCount.IncrementBy(prometheus.NilLabels, float64(n))
+	i.walkKeysCount.Add(float64(n))
 }

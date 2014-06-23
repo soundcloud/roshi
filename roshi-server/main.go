@@ -48,7 +48,7 @@ func main() {
 		statsdAddress              = flag.String("statsd.address", "", "Statsd address (blank to disable)")
 		statsdSampleRate           = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
 		statsdBucketPrefix         = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
-		prometheusPrefix           = flag.String("prometheus.prefix", "roshiserver_", "Prometheus metric key prefix, including trailing underscore")
+		prometheusPrefix           = flag.String("prometheus.prefix", "roshiserver", "Prometheus metric key prefix, excluding trailing underscore")
 		httpAddress                = flag.String("http.address", ":6302", "HTTP listen address")
 	)
 	flag.Parse()
