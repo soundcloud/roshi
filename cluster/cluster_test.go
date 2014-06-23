@@ -372,5 +372,5 @@ func integrationCluster(t *testing.T, addresses string, maxSize int) cluster.Clu
 		})
 	}
 
-	return cluster.New(p, maxSize, nil)
+	return cluster.New(p, maxSize, 0, nil)
 }

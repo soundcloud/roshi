@@ -34,6 +34,7 @@ func main() {
 		redisWriteTimeout   = flag.Duration("redis.write.timeout", 3*time.Second, "Redis write timeout")
 		redisMCPI           = flag.Int("redis.mcpi", 2, "Max connections per Redis instance")
 		redisHash           = flag.String("redis.hash", "murmur3", "Redis hash function: murmur3, fnv, fnva")
+		selectGap           = flag.Duration("select.gap", 0*time.Millisecond, "delay between pipeline read invocations when Selecting over multiple keys")
 		maxSize             = flag.Int("max.size", 10000, "Maximum number of events per key")
 		batchSize           = flag.Int("batch.size", 100, "keys to select per request")
 		maxKeysPerSecond    = flag.Int64("max.keys.per.second", 1000, "max keys per second to walk")
@@ -42,6 +43,7 @@ func main() {
 		statsdAddress       = flag.String("statsd.address", "", "Statsd address (blank to disable)")
 		statsdSampleRate    = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
 		statsdBucketPrefix  = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
+		prometheusPrefix    = flag.String("prometheus.prefix", "roshiwalker_", "Prometheus metric key prefix, including trailing underscore")
 		httpAddress         = flag.String("http.address", ":6060", "HTTP listen address (profiling/metrics endpoints only)")
 	)
 	flag.Parse()
@@ -62,7 +64,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	prometheusInstr := prometheus.New("")
+	prometheusInstr := prometheus.New(*prometheusPrefix)
 	prometheusInstr.Install("/metrics", http.DefaultServeMux)
 	instr := instrumentation.NewMultiInstrumentation(
 		statsd.New(statter, float32(*statsdSampleRate), *statsdBucketPrefix),
@@ -89,6 +91,7 @@ func main() {
 		*redisMCPI,
 		hashFunc,
 		*maxSize,
+		*selectGap,
 		instr,
 	)
 	if err != nil {
@@ -125,6 +128,7 @@ func makeClusters(
 	redisMCPI int,
 	hashFunc func(string) uint32,
 	maxSize int,
+	selectGap time.Duration,
 	instr instrumentation.Instrumentation,
 ) ([]cluster.Cluster, error) {
 	clusters := []cluster.Cluster{}
@@ -141,6 +145,7 @@ func makeClusters(
 				hashFunc,
 			),
 			maxSize,
+			selectGap,
 			instr,
 		))
 		log.Printf("Redis cluster %d: %d instance(s)", i+1, len(addresses))

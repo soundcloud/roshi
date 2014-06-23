@@ -126,19 +126,22 @@ func init() {
 type cluster struct {
 	pool            *pool.Pool
 	maxSize         int
+	selectGap       time.Duration
 	instrumentation instrumentation.Instrumentation
 }
 
 // New creates and returns a new Cluster backed by a concrete Redis cluster.
-// maxSize for each key will be enforced at write time. Instrumentation may be
-// nil.
-func New(pool *pool.Pool, maxSize int, instr instrumentation.Instrumentation) Cluster {
+// maxSize for each key will be enforced at write time. selectGap specifies a
+// wait period between pipeline calls to individual connections within a pool
+// when performing a Select with multiple keys. Instrumentation may be nil.
+func New(pool *pool.Pool, maxSize int, selectGap time.Duration, instr instrumentation.Instrumentation) Cluster {
 	if instr == nil {
 		instr = instrumentation.NopInstrumentation{}
 	}
 	return &cluster{
 		pool:            pool,
 		maxSize:         maxSize,
+		selectGap:       selectGap,
 		instrumentation: instr,
 	}
 }
@@ -195,9 +198,11 @@ func (c *cluster) Select(keys []string, offset, limit int) <-chan Element {
 		// can be an error element. Client does the gathering.
 		wg := sync.WaitGroup{}
 		wg.Add(len(m))
+		delay := time.Duration(0)
 		for index, keys := range m {
-			go func(index int, keys []string) {
+			go func(index int, keys []string, delay time.Duration) {
 				defer wg.Done()
+				time.Sleep(delay)
 
 				// Make channel sends outside of this function, to
 				// minimize our time with the redis.Conn.
@@ -215,7 +220,8 @@ func (c *cluster) Select(keys []string, offset, limit int) <-chan Element {
 				for _, element := range elements {
 					out <- element
 				}
-			}(index, keys)
+			}(index, keys, delay)
+			delay += c.selectGap
 		}
 		wg.Wait()
 

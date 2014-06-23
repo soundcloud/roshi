@@ -44,9 +44,11 @@ func main() {
 		farmRepairStrategy         = flag.String("farm.repair.strategy", "RateLimitedRepairs", "Farm repair strategy: AllRepairs, NoRepairs, RateLimitedRepairs")
 		farmRepairMaxKeysPerSecond = flag.Int("farm.repair.max.keys.per.second", 1000, "Max repaired keys per second (RateLimited repairer only)")
 		maxSize                    = flag.Int("max.size", 10000, "Maximum number of events per key")
+		selectGap                  = flag.Duration("select.gap", 0*time.Millisecond, "delay between pipeline read invocations when Selecting over multiple keys")
 		statsdAddress              = flag.String("statsd.address", "", "Statsd address (blank to disable)")
 		statsdSampleRate           = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
 		statsdBucketPrefix         = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
+		prometheusPrefix           = flag.String("prometheus.prefix", "roshiserver_", "Prometheus metric key prefix, including trailing underscore")
 		httpAddress                = flag.String("http.address", ":6302", "HTTP listen address")
 	)
 	flag.Parse()
@@ -63,7 +65,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	prometheusInstr := prometheus.New("roshiserver_")
+	prometheusInstr := prometheus.New(*prometheusPrefix)
 	prometheusInstr.Install("/metrics", http.DefaultServeMux)
 	instr := instrumentation.NewMultiInstrumentation(
 		statsd.New(statter, float32(*statsdSampleRate), *statsdBucketPrefix),
@@ -125,6 +127,7 @@ func main() {
 		readStrategy,
 		repairStrategy,
 		*maxSize,
+		*selectGap,
 		instr,
 	)
 	if err != nil {
@@ -154,6 +157,7 @@ func newFarm(
 	readStrategy farm.ReadStrategy,
 	repairStrategy farm.RepairStrategy,
 	maxSize int,
+	selectGap time.Duration,
 	instr instrumentation.Instrumentation,
 ) (*farm.Farm, error) {
 	// Parse out and build clusters.
@@ -171,6 +175,7 @@ func newFarm(
 				hash,
 			),
 			maxSize,
+			selectGap,
 			instr,
 		))
 		log.Printf("Redis cluster %d: %d instance(s)", i+1, len(addresses))
