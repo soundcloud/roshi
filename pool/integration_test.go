@@ -91,6 +91,7 @@ func TestRecovery(t *testing.T) {
 			return err
 		})
 		t.Logf("Second PING x1 gave error %v (just FYI)", err)
+		time.Sleep(1*time.Second) // attempt to scoot by a problem with Travis
 
 		// Try second PING x2
 		if err := p.With("irrelevant", func(conn redis.Conn) error {
