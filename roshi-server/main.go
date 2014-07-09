@@ -49,6 +49,7 @@ func main() {
 		statsdSampleRate           = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
 		statsdBucketPrefix         = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
 		prometheusPrefix           = flag.String("prometheus.prefix", "roshiserver", "Prometheus metric key prefix, excluding trailing underscore")
+		prometheusMaxSummaryAge    = flag.Duration("prometheus.max.summary.age", 10*time.Second, "Prometheus max age for instantaneous histogram data")
 		httpAddress                = flag.String("http.address", ":6302", "HTTP listen address")
 	)
 	flag.Parse()
@@ -65,7 +66,7 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	prometheusInstr := prometheus.New(*prometheusPrefix)
+	prometheusInstr := prometheus.New(*prometheusPrefix, *prometheusMaxSummaryAge)
 	prometheusInstr.Install("/metrics", http.DefaultServeMux)
 	instr := instrumentation.NewMultiInstrumentation(
 		statsd.New(statter, float32(*statsdSampleRate), *statsdBucketPrefix),

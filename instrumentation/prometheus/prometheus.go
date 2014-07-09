@@ -48,7 +48,7 @@ type PrometheusInstrumentation struct {
 // New returns a new Instrumentation that prints metrics to the passed
 // io.Writer. All metrics are prefixed with an appropriate bucket name, and
 // take the form e.g. "insert.record.count 10".
-func New(prefix string) PrometheusInstrumentation {
+func New(prefix string, maxSummaryAge time.Duration) PrometheusInstrumentation {
 	i := PrometheusInstrumentation{
 		insertCallCount: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: prefix,
@@ -64,11 +64,13 @@ func New(prefix string) PrometheusInstrumentation {
 			Namespace: prefix,
 			Name:      "insert_call_duration_nanoseconds",
 			Help:      "Insert duration per-call.",
+			MaxAge:    maxSummaryAge,
 		}),
 		insertRecordDuration: prometheus.NewSummary(prometheus.SummaryOpts{
 			Namespace: prefix,
 			Name:      "insert_record_duration_nanoseconds",
 			Help:      "Insert duration per-record.",
+			MaxAge:    maxSummaryAge,
 		}),
 		insertQuorumFailureCount: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: prefix,
@@ -94,6 +96,7 @@ func New(prefix string) PrometheusInstrumentation {
 			Namespace: prefix,
 			Name:      "select_first_response_duration_nanoseconds",
 			Help:      "Select first response duration.",
+			MaxAge:    maxSummaryAge,
 		}),
 		selectPartialErrorCount: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: prefix,
@@ -104,16 +107,19 @@ func New(prefix string) PrometheusInstrumentation {
 			Namespace: prefix,
 			Name:      "select_blocking_duration_nanoseconds",
 			Help:      "Select blocking duration.",
+			MaxAge:    maxSummaryAge,
 		}),
 		selectOverheadDuration: prometheus.NewSummary(prometheus.SummaryOpts{
 			Namespace: prefix,
 			Name:      "select_overhead_duration_nanoseconds",
 			Help:      "Select overhead duration.",
+			MaxAge:    maxSummaryAge,
 		}),
 		selectDuration: prometheus.NewSummary(prometheus.SummaryOpts{
 			Namespace: prefix,
 			Name:      "select_duration_nanoseconds",
 			Help:      "Overall select duration.",
+			MaxAge:    maxSummaryAge,
 		}),
 		selectSendAllPromotionCount: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: prefix,
@@ -149,11 +155,13 @@ func New(prefix string) PrometheusInstrumentation {
 			Namespace: prefix,
 			Name:      "delete_call_duration_nanoseconds",
 			Help:      "Delete duration, per-call.",
+			MaxAge:    maxSummaryAge,
 		}),
 		deleteRecordDuration: prometheus.NewSummary(prometheus.SummaryOpts{
 			Namespace: prefix,
 			Name:      "delete_record_duration_nanoseconds",
 			Help:      "Delete duration, per-record.",
+			MaxAge:    maxSummaryAge,
 		}),
 		deleteQuorumFailureCount: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: prefix,
