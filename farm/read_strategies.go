@@ -39,7 +39,7 @@ func SendOneReadOne(farm *Farm) coreReadStrategy {
 		var firstResponseDuration time.Duration
 		blockingBegan := time.Now()
 		retrieved := 0
-		c := farm.clusters[rand.Intn(len(farm.clusters))].Select(keys, offset, limit)
+		c := farm.readClusters[rand.Intn(len(farm.readClusters))].Select(keys, offset, limit)
 		for e := range c {
 			if firstResponseDuration == 0 {
 				firstResponseDuration = time.Since(blockingBegan)
@@ -77,7 +77,7 @@ func SendAllReadAll(farm *Farm) coreReadStrategy {
 		go func() {
 			farm.instrumentation.SelectCall()
 			farm.instrumentation.SelectKeys(len(keys))
-			farm.instrumentation.SelectSendTo(len(farm.clusters))
+			farm.instrumentation.SelectSendTo(len(farm.readClusters))
 		}()
 		defer func() { go farm.instrumentation.SelectDuration(time.Since(began)) }()
 
@@ -86,11 +86,11 @@ func SendAllReadAll(farm *Farm) coreReadStrategy {
 		// have nice range semantics in our gather phase.
 		elements := make(chan cluster.Element)
 		wg := sync.WaitGroup{}
-		wg.Add(len(farm.clusters))
+		wg.Add(len(farm.readClusters))
 		go func() { wg.Wait(); close(elements) }()
 
 		blockingBegan := time.Now()
-		scatterSelects(farm.clusters, keys, offset, limit, &wg, elements)
+		scatterSelects(farm.readClusters, keys, offset, limit, &wg, elements)
 
 		// Gather all elements. An error implies some problem with the Redis
 		// instance or the underlying cluster, and shouldn't trigger read
@@ -188,7 +188,7 @@ func SendVarReadFirstLinger(maxKeysPerSecond int, thresholdLatency time.Duration
 			// we can have nice range semantics in our linger phase.
 			elements := make(chan cluster.Element)
 			wg := sync.WaitGroup{}
-			wg.Add(len(farm.clusters))
+			wg.Add(len(farm.readClusters))
 			go func() {
 				// Note that we need a wg.Done signal for every cluster, even
 				// if we didn't actually send to it!
@@ -201,14 +201,14 @@ func SendVarReadFirstLinger(maxKeysPerSecond int, thresholdLatency time.Duration
 			var clustersUsed, clustersNotUsed []cluster.Cluster
 			maySendAll := permits.canHas(int64(len(keys)))
 			if maySendAll {
-				clustersUsed = farm.clusters
+				clustersUsed = farm.readClusters
 				clustersNotUsed = []cluster.Cluster{}
 			} else {
-				i := rand.Intn(len(farm.clusters))
-				clustersUsed = farm.clusters[i : i+1]
-				clustersNotUsed = make([]cluster.Cluster, 0, len(farm.clusters)-1)
-				clustersNotUsed = append(clustersNotUsed, farm.clusters[:i]...)
-				clustersNotUsed = append(clustersNotUsed, farm.clusters[i+1:]...)
+				i := rand.Intn(len(farm.readClusters))
+				clustersUsed = farm.readClusters[i : i+1]
+				clustersNotUsed = make([]cluster.Cluster, 0, len(farm.readClusters)-1)
+				clustersNotUsed = append(clustersNotUsed, farm.readClusters[:i]...)
+				clustersNotUsed = append(clustersNotUsed, farm.readClusters[i+1:]...)
 			}
 
 			blockingBegan := time.Now()
@@ -269,7 +269,7 @@ func SendVarReadFirstLinger(maxKeysPerSecond int, thresholdLatency time.Duration
 					}
 					go farm.instrumentation.SelectSendTo(len(clustersNotUsed))
 					scatterSelects(clustersNotUsed, remainingKeysSlice, offset, limit, &wg, elements)
-					clustersUsed = farm.clusters
+					clustersUsed = farm.readClusters
 					clustersNotUsed = []cluster.Cluster{}
 				}
 
@@ -323,8 +323,8 @@ func SendVarReadFirstLinger(maxKeysPerSecond int, thresholdLatency time.Duration
 				return response, nil
 			}
 			if sentOneGotEverything {
-				// The WaitGroup expects len(farm.clusters) Done signals, but
-				// so far we've only given 1. Give the rest.
+				// The WaitGroup expects len(farm.readClusters) Done signals,
+				// but so far we've only given 1. Give the rest.
 				for _ = range clustersNotUsed {
 					wg.Done()
 				}

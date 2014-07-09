@@ -3,7 +3,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -12,13 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/peterbourgon/g2s"
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/farm"
 	"github.com/soundcloud/roshi/instrumentation"
 	"github.com/soundcloud/roshi/instrumentation/prometheus"
 	"github.com/soundcloud/roshi/instrumentation/statsd"
 	"github.com/soundcloud/roshi/pool"
+
+	"github.com/peterbourgon/g2s"
 	"github.com/tsenart/tb"
 )
 
@@ -85,7 +85,7 @@ func main() {
 	}
 
 	// Set up the clusters.
-	clusters, err := makeClusters(
+	writeClusters, readClusters, err := farm.ParseFarmString(
 		*redisInstances,
 		*redisConnectTimeout, *redisReadTimeout, *redisWriteTimeout,
 		*redisMCPI,
@@ -98,62 +98,32 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// HTTP server for profiling
+	// HTTP server for profiling.
 	go func() { log.Print(http.ListenAndServe(*httpAddress, nil)) }()
 
 	// Set up our rate limiter. Remember: it's per-key, not per-request.
-	freq := time.Duration(1/(*maxKeysPerSecond)) * time.Second
-	bucket := tb.NewBucket(*maxKeysPerSecond, freq)
+	var (
+		freq   = time.Duration(1/(*maxKeysPerSecond)) * time.Second
+		bucket = tb.NewBucket(*maxKeysPerSecond, freq)
+	)
 
-	// Build the farm
-	readStrategy := farm.SendAllReadAll
-	repairStrategy := farm.AllRepairs // blocking
-	dst := farm.New(clusters, len(clusters), readStrategy, repairStrategy, instr)
+	// Build the farm.
+	var (
+		readStrategy   = farm.SendAllReadAll
+		repairStrategy = farm.AllRepairs    // blocking
+		writeQuorum    = len(writeClusters) // 100%
+		dst            = farm.New(writeClusters, readClusters, writeQuorum, readStrategy, repairStrategy, instr)
+	)
 
-	// Perform the walk
-	begin := time.Now()
+	// Perform the walk.
+	defer func(t time.Time) { log.Printf("total walk complete, %s", time.Since(t)) }(time.Now())
 	for {
-		src := scan(clusters, *batchSize, *scanLogInterval) // new key set
+		src := scan(readClusters, *batchSize, *scanLogInterval) // new key set
 		walkOnce(dst, bucket, src, *maxSize, instr)
 		if *once {
 			break
 		}
 	}
-	log.Printf("walk complete in %s", time.Since(begin))
-}
-
-func makeClusters(
-	redisInstances string,
-	connectTimeout, readTimeout, writeTimeout time.Duration,
-	redisMCPI int,
-	hashFunc func(string) uint32,
-	maxSize int,
-	selectGap time.Duration,
-	instr instrumentation.Instrumentation,
-) ([]cluster.Cluster, error) {
-	clusters := []cluster.Cluster{}
-	for i, clusterInstances := range strings.Split(redisInstances, ";") {
-		addresses := stripBlank(strings.Split(clusterInstances, ","))
-		if len(addresses) <= 0 {
-			continue
-		}
-		clusters = append(clusters, cluster.New(
-			pool.New(
-				addresses,
-				connectTimeout, readTimeout, writeTimeout,
-				redisMCPI,
-				hashFunc,
-			),
-			maxSize,
-			selectGap,
-			instr,
-		))
-		log.Printf("Redis cluster %d: %d instance(s)", i+1, len(addresses))
-	}
-	if len(clusters) <= 0 {
-		return []cluster.Cluster{}, fmt.Errorf("no cluster(s)")
-	}
-	return clusters, nil
 }
 
 func scan(clusters []cluster.Cluster, batchSize int, logInterval time.Duration) <-chan []string {
@@ -182,6 +152,7 @@ func walkOnce(
 	maxSize int,
 	instr instrumentation.WalkInstrumentation,
 ) {
+	defer func(t time.Time) { log.Printf("single walk complete, %s", time.Since(t)) }(time.Now())
 	for batch := range src {
 		log.Printf("walk: received batch of %d, requesting tokens", len(batch))
 		wait.Wait(int64(len(batch)))
@@ -190,17 +161,6 @@ func walkOnce(
 		instr.WalkKeys(len(batch))
 		log.Printf("walk: performed Select, waiting for next batch")
 	}
-}
-
-func stripBlank(src []string) []string {
-	dst := []string{}
-	for _, s := range src {
-		if s == "" {
-			continue
-		}
-		dst = append(dst, s)
-	}
-	return dst
 }
 
 type waiter interface {
