@@ -93,7 +93,7 @@ func s2tupleSets(t *testing.T, s string) []tupleSet {
 func s2pair(t *testing.T, s string) testUnionDifferencePair {
 	toks := strings.Split(s, "/")
 	if len(toks) != 2 {
-		t.Fatalf("invalid pair string '%s'", s)
+		t.Fatalf("invalid pair string %q", s)
 	}
 	return testUnionDifferencePair{
 		union:      s2tupleSet(t, strings.TrimSpace(toks[0])),
@@ -140,7 +140,7 @@ func s2tupleSet(t *testing.T, s string) tupleSet {
 	case "A5B2C1":
 		return tupleSet{testTupleA5: struct{}{}, testTupleB2: struct{}{}, testTupleC1: struct{}{}}
 	default:
-		t.Fatalf("invalid set string '%s'", s)
+		t.Fatalf("invalid set string %q", s)
 	}
 	return tupleSet{}
 }
@@ -164,7 +164,7 @@ func s2keyMemberSet(t *testing.T, s string) keyMemberSet {
 	case "ABC":
 		return keyMemberSet{testKeyMemberA: struct{}{}, testKeyMemberB: struct{}{}, testKeyMemberC: struct{}{}}
 	default:
-		t.Fatalf("invalid set string '%s'", s)
+		t.Fatalf("invalid set string %q", s)
 	}
 	return keyMemberSet{}
 }

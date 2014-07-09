@@ -81,7 +81,7 @@ func main() {
 	case "fnva":
 		hashFunc = pool.FNVa
 	default:
-		log.Fatalf("unknown hash '%s'", *redisHash)
+		log.Fatalf("unknown hash %q", *redisHash)
 	}
 
 	// Set up the clusters.

@@ -85,7 +85,7 @@ func main() {
 	case "sendvarreadfirstlinger":
 		readStrategy = farm.SendVarReadFirstLinger(*farmReadThresholdRate, *farmReadThresholdLatency)
 	default:
-		log.Fatalf("unknown read strategy '%s'", *farmReadStrategy)
+		log.Fatalf("unknown read strategy %q", *farmReadStrategy)
 	}
 	log.Printf("using %s read strategy", *farmReadStrategy)
 
@@ -101,7 +101,7 @@ func main() {
 	case "ratelimitedrepairs":
 		repairStrategy = farm.Nonblocking(repairRequestBufferSize, farm.RateLimited(*farmRepairMaxKeysPerSecond, farm.AllRepairs))
 	default:
-		log.Fatalf("unknown repair strategy '%s'", *farmRepairStrategy)
+		log.Fatalf("unknown repair strategy %q", *farmRepairStrategy)
 	}
 	log.Printf("using %s repair strategy", *farmRepairStrategy)
 
@@ -115,7 +115,7 @@ func main() {
 	case "fnva":
 		hashFunc = pool.FNVa
 	default:
-		log.Fatalf("unknown hash '%s'", *redisHash)
+		log.Fatalf("unknown hash %q", *redisHash)
 	}
 
 	// Build the farm.
@@ -365,18 +365,18 @@ func evaluateScalarPercentage(s string, n int) (int, error) {
 	if strings.HasSuffix(s, "%") {
 		percentInt, err := strconv.ParseInt(s[:len(s)-1], 10, 64)
 		if err != nil || percentInt <= 0 || percentInt > 100 {
-			return -1, fmt.Errorf("bad percentage input '%s'", s)
+			return -1, fmt.Errorf("bad percentage input %q", s)
 		}
 		value = int(math.Ceil((float64(percentInt) / 100.0) * float64(n)))
 	} else {
 		value64, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
-			return -1, fmt.Errorf("bad scalar input '%s'", s)
+			return -1, fmt.Errorf("bad scalar input %q", s)
 		}
 		value = int(value64)
 	}
 	if value <= 0 || value > n {
-		return -1, fmt.Errorf("with n=%d, value=%d (from '%s') is invalid", n, value, s)
+		return -1, fmt.Errorf("with n=%d, value=%d (from %q) is invalid", n, value, s)
 	}
 	return value, nil
 }
