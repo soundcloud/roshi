@@ -34,35 +34,55 @@ func ParseFarmString(
 	selectGap time.Duration,
 	instr instrumentation.Instrumentation,
 ) (writeClusters, readClusters []cluster.Cluster, err error) {
+	seen := map[string]int{}
+
 	for i, clusterString := range strings.Split(stripWhitespace(farmString), ";") {
 		var (
 			hostPorts = []string{}
 			writeOnly = false
 		)
 		for _, hostPort := range strings.Split(clusterString, ",") {
+			if hostPort == "" {
+				continue
+			}
 			if strings.ToLower(hostPort) == "writeonly" {
 				writeOnly = true
 				continue
 			}
+			seen[hostPort]++
 			hostPorts = append(hostPorts, hostPort)
 		}
 		if len(hostPorts) <= 0 {
 			return []cluster.Cluster{}, []cluster.Cluster{}, fmt.Errorf("empty cluster %d (%q)", i+1, clusterString)
 		}
+
 		cluster := cluster.New(
 			pool.New(hostPorts, connectTimeout, readTimeout, writeTimeout, redisMCPI, hash),
 			maxSize,
 			selectGap,
 			instr,
 		)
+
 		writeClusters = append(writeClusters, cluster)
 		if !writeOnly {
 			readClusters = append(readClusters, cluster)
 		}
 	}
+
+	duplicates := []string{}
+	for hostPort, count := range seen {
+		if count > 1 {
+			duplicates = append(duplicates, hostPort)
+		}
+	}
+	if len(duplicates) > 0 {
+		return []cluster.Cluster{}, []cluster.Cluster{}, fmt.Errorf("duplicate instances found: %s", strings.Join(duplicates, ", "))
+	}
+
 	if len(writeClusters) <= 0 && len(readClusters) <= 0 {
 		return []cluster.Cluster{}, []cluster.Cluster{}, fmt.Errorf("no clusters specified")
 	}
+
 	if len(writeClusters) < len(readClusters) {
 		return []cluster.Cluster{}, []cluster.Cluster{}, fmt.Errorf(
 			"fewer write clusters (%d) than read clusters (%d)",
@@ -70,6 +90,7 @@ func ParseFarmString(
 			len(readClusters),
 		)
 	}
+
 	return writeClusters, readClusters, nil
 }
 
