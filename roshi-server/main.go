@@ -18,8 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/pat"
-	"github.com/peterbourgon/g2s"
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/farm"
@@ -27,6 +25,9 @@ import (
 	"github.com/soundcloud/roshi/instrumentation/prometheus"
 	"github.com/soundcloud/roshi/instrumentation/statsd"
 	"github.com/soundcloud/roshi/pool"
+
+	"github.com/gorilla/pat"
+	"github.com/peterbourgon/g2s"
 )
 
 func main() {
@@ -85,7 +86,7 @@ func main() {
 	case "sendvarreadfirstlinger":
 		readStrategy = farm.SendVarReadFirstLinger(*farmReadThresholdRate, *farmReadThresholdLatency)
 	default:
-		log.Fatalf("unknown read strategy '%s'", *farmReadStrategy)
+		log.Fatalf("unknown read strategy %q", *farmReadStrategy)
 	}
 	log.Printf("using %s read strategy", *farmReadStrategy)
 
@@ -101,7 +102,7 @@ func main() {
 	case "ratelimitedrepairs":
 		repairStrategy = farm.Nonblocking(repairRequestBufferSize, farm.RateLimited(*farmRepairMaxKeysPerSecond, farm.AllRepairs))
 	default:
-		log.Fatalf("unknown repair strategy '%s'", *farmRepairStrategy)
+		log.Fatalf("unknown repair strategy %q", *farmRepairStrategy)
 	}
 	log.Printf("using %s repair strategy", *farmRepairStrategy)
 
@@ -115,7 +116,7 @@ func main() {
 	case "fnva":
 		hashFunc = pool.FNVa
 	default:
-		log.Fatalf("unknown hash '%s'", *redisHash)
+		log.Fatalf("unknown hash %q", *redisHash)
 	}
 
 	// Build the farm.
@@ -161,39 +162,32 @@ func newFarm(
 	selectGap time.Duration,
 	instr instrumentation.Instrumentation,
 ) (*farm.Farm, error) {
-	// Parse out and build clusters.
-	clusters := []cluster.Cluster{}
-	for i, clusterInstances := range strings.Split(redisInstances, ";") {
-		addresses := stripBlank(strings.Split(clusterInstances, ","))
-		if len(addresses) <= 0 {
-			continue
-		}
-		clusters = append(clusters, cluster.New(
-			pool.New(
-				addresses,
-				connectTimeout, readTimeout, writeTimeout,
-				redisMCPI,
-				hash,
-			),
-			maxSize,
-			selectGap,
-			instr,
-		))
-		log.Printf("Redis cluster %d: %d instance(s)", i+1, len(addresses))
-	}
-	if len(clusters) <= 0 {
-		return nil, fmt.Errorf("no cluster(s)")
-	}
-
-	// Evaluate writeQuorum.
-	writeQuorum, err := evaluateScalarPercentage(writeQuorumStr, len(clusters))
+	writeClusters, readClusters, err := farm.ParseFarmString(
+		redisInstances,
+		connectTimeout,
+		readTimeout,
+		writeTimeout,
+		redisMCPI,
+		hash,
+		maxSize,
+		selectGap,
+		instr,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	// Build and return Farm.
+	writeQuorum, err := evaluateScalarPercentage(
+		writeQuorumStr,
+		len(writeClusters),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return farm.New(
-		clusters,
+		writeClusters,
+		readClusters,
 		writeQuorum,
 		readStrategy,
 		repairStrategy,
@@ -357,17 +351,6 @@ func respondError(w http.ResponseWriter, method, url string, code int, err error
 	})
 }
 
-func stripBlank(src []string) []string {
-	dst := []string{}
-	for _, s := range src {
-		if s == "" {
-			continue
-		}
-		dst = append(dst, s)
-	}
-	return dst
-}
-
 // evaluateScalarPercentage takes a string of the form "P%" (percent) or "S"
 // (straight scalar value), and evaluates that against the passed total n.
 // Percentages mean at least that percent; for example, "50%" of 3 evaluates
@@ -383,18 +366,18 @@ func evaluateScalarPercentage(s string, n int) (int, error) {
 	if strings.HasSuffix(s, "%") {
 		percentInt, err := strconv.ParseInt(s[:len(s)-1], 10, 64)
 		if err != nil || percentInt <= 0 || percentInt > 100 {
-			return -1, fmt.Errorf("bad percentage input '%s'", s)
+			return -1, fmt.Errorf("bad percentage input %q", s)
 		}
 		value = int(math.Ceil((float64(percentInt) / 100.0) * float64(n)))
 	} else {
 		value64, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
-			return -1, fmt.Errorf("bad scalar input '%s'", s)
+			return -1, fmt.Errorf("bad scalar input %q", s)
 		}
 		value = int(value64)
 	}
 	if value <= 0 || value > n {
-		return -1, fmt.Errorf("with n=%d, value=%d (from '%s') is invalid", n, value, s)
+		return -1, fmt.Errorf("with n=%d, value=%d (from %q) is invalid", n, value, s)
 	}
 	return value, nil
 }

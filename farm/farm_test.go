@@ -3,10 +3,49 @@ package farm
 import (
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/soundcloud/roshi/common"
+	"github.com/soundcloud/roshi/instrumentation"
 )
+
+func TestWriteOnly(t *testing.T) {
+	var (
+		nClusters   = 5
+		allClusters = newMockClusters(nClusters)
+		farm        = New(allClusters, allClusters[1:], nClusters, SendAllReadAll, NoRepairs, instrumentation.NopInstrumentation{})
+	)
+
+	// Write.
+	if err := farm.Insert([]common.KeyScoreMember{
+		{Key: "a", Score: 1, Member: "a"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write should go to all clusters.
+	for i, cluster := range allClusters {
+		if expected, got := int32(1), atomic.LoadInt32(&(cluster.(*mockCluster).countInsert)); expected != got {
+			t.Errorf("cluster %d countInsert: expected %d, got %d", i+1, expected, got)
+		}
+	}
+
+	// Read.
+	if _, err := farm.Select([]string{"a"}, 0, 10); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read should go only to the read clusters.
+	if expected, got := int32(0), atomic.LoadInt32(&(allClusters[0].(*mockCluster).countSelect)); expected != got {
+		t.Errorf("write cluster countSelect: expected %d, got %d", expected, got)
+	}
+	for i, cluster := range allClusters[1:] {
+		if expected, got := int32(1), atomic.LoadInt32(&(cluster.(*mockCluster).countSelect)); expected != got {
+			t.Errorf("read cluster %d countSelect: expected %d, got %d", i+1, expected, got)
+		}
+	}
+}
 
 func TestUnionDifferenceOfOne(t *testing.T) {
 	inputSet := tupleSet{
@@ -93,7 +132,7 @@ func s2tupleSets(t *testing.T, s string) []tupleSet {
 func s2pair(t *testing.T, s string) testUnionDifferencePair {
 	toks := strings.Split(s, "/")
 	if len(toks) != 2 {
-		t.Fatalf("invalid pair string '%s'", s)
+		t.Fatalf("invalid pair string %q", s)
 	}
 	return testUnionDifferencePair{
 		union:      s2tupleSet(t, strings.TrimSpace(toks[0])),
@@ -140,7 +179,7 @@ func s2tupleSet(t *testing.T, s string) tupleSet {
 	case "A5B2C1":
 		return tupleSet{testTupleA5: struct{}{}, testTupleB2: struct{}{}, testTupleC1: struct{}{}}
 	default:
-		t.Fatalf("invalid set string '%s'", s)
+		t.Fatalf("invalid set string %q", s)
 	}
 	return tupleSet{}
 }
@@ -164,7 +203,7 @@ func s2keyMemberSet(t *testing.T, s string) keyMemberSet {
 	case "ABC":
 		return keyMemberSet{testKeyMemberA: struct{}{}, testKeyMemberB: struct{}{}, testKeyMemberC: struct{}{}}
 	default:
-		t.Fatalf("invalid set string '%s'", s)
+		t.Fatalf("invalid set string %q", s)
 	}
 	return keyMemberSet{}
 }

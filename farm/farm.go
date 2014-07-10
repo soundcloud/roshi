@@ -19,7 +19,8 @@ func init() {
 
 // Farm implements CRDT-semantic ZSET methods over many clusters.
 type Farm struct {
-	clusters        []cluster.Cluster
+	writeClusters   []cluster.Cluster
+	readClusters    []cluster.Cluster
 	writeQuorum     int
 	readStrategy    coreReadStrategy
 	repairStrategy  coreRepairStrategy
@@ -28,14 +29,16 @@ type Farm struct {
 
 // New creates and returns a new Farm.
 //
-// Writes are always sent to all clusters, and writeQuorum determines how many
-// individual successful responses need to be received before the client
-// receives an overall success. Reads are sent to clusters according to the
-// passed ReadStrategy.
+// Writes are always sent to all write clusters, and writeQuorum determines
+// how many individual successful responses need to be received before the
+// client receives an overall success. Reads are sent to read clusters
+// according to the passed ReadStrategy.
+//
+// The repair strategy will only issue repairs against the read clusters.
 //
 // Instrumentation may be nil; all other parameters are required.
 func New(
-	clusters []cluster.Cluster,
+	writeClusters, readClusters []cluster.Cluster,
 	writeQuorum int,
 	readStrategy ReadStrategy,
 	repairStrategy RepairStrategy,
@@ -45,9 +48,10 @@ func New(
 		instr = instrumentation.NopInstrumentation{}
 	}
 	farm := &Farm{
-		clusters:        clusters,
+		writeClusters:   writeClusters,
+		readClusters:    readClusters,
 		writeQuorum:     writeQuorum,
-		repairStrategy:  repairStrategy(clusters, instr),
+		repairStrategy:  repairStrategy(readClusters, instr),
 		instrumentation: instr,
 	}
 	farm.readStrategy = readStrategy(farm)
@@ -107,16 +111,20 @@ func (f *Farm) write(
 	}(time.Now())
 
 	// Scatter
-	errChan := make(chan error, len(f.clusters))
-	for _, c := range f.clusters {
+	errChan := make(chan error, len(f.writeClusters))
+	for _, c := range f.writeClusters {
 		go func(c cluster.Cluster) {
 			errChan <- action(c, tuples)
 		}(c)
 	}
 
 	// Gather
-	errors, got, need := []string{}, 0, f.writeQuorum
-	haveQuorum := func() bool { return got-len(errors) >= need }
+	var (
+		errors     = []string{}
+		got        = 0
+		need       = f.writeQuorum
+		haveQuorum = func() bool { return (got - len(errors)) >= need }
+	)
 	for i := 0; i < cap(errChan); i++ {
 		err := <-errChan
 		if err != nil {
@@ -141,9 +149,11 @@ func (f *Farm) write(
 // defined to be those key-members with imperfect agreement across all input
 // sets.
 func unionDifference(tupleSets []tupleSet) (tupleSet, keyMemberSet) {
-	expectedCount := len(tupleSets)
-	counts := map[common.KeyScoreMember]int{}
-	scores := map[common.KeyMember]float64{}
+	var (
+		expectedCount = len(tupleSets)
+		counts        = map[common.KeyScoreMember]int{}
+		scores        = map[common.KeyMember]float64{}
+	)
 	for _, tupleSet := range tupleSets {
 		for tuple := range tupleSet {
 			// For union
@@ -156,7 +166,10 @@ func unionDifference(tupleSets []tupleSet) (tupleSet, keyMemberSet) {
 		}
 	}
 
-	union, difference := tupleSet{}, keyMemberSet{}
+	var (
+		union      = tupleSet{}
+		difference = keyMemberSet{}
+	)
 	for keyMember, bestScore := range scores {
 		union.add(common.KeyScoreMember{
 			Key:    keyMember.Key,

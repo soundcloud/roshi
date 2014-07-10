@@ -44,7 +44,7 @@ func TestInsertSelectKeys(t *testing.T) {
 	m := map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
-			t.Errorf("during Select: key '%s': %s", e.Key, e.Error)
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
 		m[e.Key] = e.KeyScoreMembers
 	}
@@ -76,7 +76,7 @@ func TestInsertSelectKeys(t *testing.T) {
 	m = map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
-			t.Errorf("during Select: key '%s': %s", e.Key, e.Error)
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
 		m[e.Key] = e.KeyScoreMembers
 	}
@@ -103,7 +103,7 @@ func TestInsertSelectKeys(t *testing.T) {
 	m = map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
-			t.Errorf("during Select: key '%s': %s", e.Key, e.Error)
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
 		m[e.Key] = e.KeyScoreMembers
 	}
@@ -161,7 +161,7 @@ func TestInsertIdempotency(t *testing.T) {
 	m := map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
-			t.Errorf("during Select: key '%s': %s", e.Key, e.Error)
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
 		m[e.Key] = e.KeyScoreMembers
 	}
@@ -179,7 +179,7 @@ func TestInsertIdempotency(t *testing.T) {
 	m = map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
-			t.Errorf("during Select: key '%s': %s", e.Key, e.Error)
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
 		m[e.Key] = e.KeyScoreMembers
 	}
@@ -197,7 +197,7 @@ func TestInsertIdempotency(t *testing.T) {
 	m = map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
-			t.Errorf("during Select: key '%s': %s", e.Key, e.Error)
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
 		m[e.Key] = e.KeyScoreMembers
 	}
@@ -215,7 +215,7 @@ func TestInsertIdempotency(t *testing.T) {
 	m = map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
-			t.Errorf("during Select: key '%s': %s", e.Key, e.Error)
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
 		m[e.Key] = e.KeyScoreMembers
 	}
@@ -257,7 +257,7 @@ func TestInsertMaxSize(t *testing.T) {
 	m := map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
-			t.Errorf("during Select: key '%s': %s", e.Key, e.Error)
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
 		m[e.Key] = e.KeyScoreMembers
 	}
@@ -283,7 +283,7 @@ func TestInsertMaxSize(t *testing.T) {
 	m = map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
-			t.Errorf("during Select: key '%s': %s", e.Key, e.Error)
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
 		m[e.Key] = e.KeyScoreMembers
 	}
@@ -309,7 +309,7 @@ func TestInsertMaxSize(t *testing.T) {
 	m = map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
-			t.Errorf("during Select: key '%s': %s", e.Key, e.Error)
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
 		m[e.Key] = e.KeyScoreMembers
 	}

@@ -58,11 +58,11 @@ func TestEvaluateScalarPercentage(t *testing.T) {
 	} {
 		got, err := evaluateScalarPercentage(tuple.s, tuple.n)
 		if (tuple.valid && err != nil) || (!tuple.valid && err == nil) {
-			t.Errorf("'%s' of %d: expected valid=%v, got error '%v' (value %d)", tuple.s, tuple.n, tuple.valid, err, got)
+			t.Errorf("%q of %d: expected valid=%v, got error '%v' (value %d)", tuple.s, tuple.n, tuple.valid, err, got)
 			continue
 		}
 		if tuple.valid && tuple.expected != got {
-			t.Errorf("'%s' of %d: expected %d, got %d", tuple.s, tuple.n, tuple.expected, got)
+			t.Errorf("%q of %d: expected %d, got %d", tuple.s, tuple.n, tuple.expected, got)
 			continue
 		}
 	}

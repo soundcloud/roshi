@@ -2,10 +2,11 @@ package farm
 
 import (
 	"fmt"
-	"github.com/soundcloud/roshi/instrumentation"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/soundcloud/roshi/instrumentation"
 
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
@@ -60,7 +61,7 @@ func MockRepairs(repairCount *int32) RepairStrategy {
 func TestSendOneReadOne(t *testing.T) {
 	clusters := newMockClusters(3)
 	repairs := int32(0)
-	farm := New(clusters, len(clusters), SendOneReadOne, MockRepairs(&repairs), nil)
+	farm := New(clusters, clusters, len(clusters), SendOneReadOne, MockRepairs(&repairs), nil)
 	farm.Insert([]common.KeyScoreMember{testingKeyScoreMember})
 
 	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
@@ -81,7 +82,7 @@ func TestSendOneReadOne(t *testing.T) {
 func TestSendAllReadAll(t *testing.T) {
 	clusters := newMockClusters(3)
 	repairs := int32(0)
-	farm := New(clusters, len(clusters), SendAllReadAll, MockRepairs(&repairs), nil)
+	farm := New(clusters, clusters, len(clusters), SendAllReadAll, MockRepairs(&repairs), nil)
 	farm.Insert([]common.KeyScoreMember{testingKeyScoreMember})
 
 	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
@@ -156,7 +157,7 @@ func TestSendAllReadAll(t *testing.T) {
 func TestSendAllReadFirstLinger(t *testing.T) {
 	clusters := newMockClusters(3)
 	repairs := int32(0)
-	farm := New(clusters, len(clusters), SendAllReadFirstLinger, MockRepairs(&repairs), nil)
+	farm := New(clusters, clusters, len(clusters), SendAllReadFirstLinger, MockRepairs(&repairs), nil)
 	farm.Insert([]common.KeyScoreMember{testingKeyScoreMember})
 
 	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
@@ -245,6 +246,7 @@ func TestSendVarReadFirstLinger(t *testing.T) {
 	clusters := newMockClusters(3)
 	repairs := int32(0)
 	farm := New(
+		clusters,
 		clusters,
 		len(clusters),
 		SendVarReadFirstLinger(2, time.Millisecond),
