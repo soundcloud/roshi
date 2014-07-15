@@ -38,23 +38,25 @@ wg := sync.WaitGroup{}
 wg.Add(len(m))
 for index, keys := range m {
 	// Pool is safe for concurrent access.
-	go p.WithIndex(index, func(c redis.Conn) error) {
-		defer wg.Done()
-		for _, key := range keys {
-			if err := c.Send("INCR", key); err != nil {
+	go func(index int, keys []string) {
+		p.WithIndex(index, func(c redis.Conn) error) {
+			defer wg.Done()
+			for _, key := range keys {
+				if err := c.Send("INCR", key); err != nil {
+					return err
+				}
+			}
+			if err := c.Flush(); err != nil {
 				return err
 			}
-		}
-		if err := c.Flush(); err != nil {
-			return err
-		}
-		for _ = range keys {
-			if _, err := c.Receive(); err != nil {
-				return err
+			for _ = range keys {
+				if _, err := c.Receive(); err != nil {
+					return err
+				}
 			}
-		}
-		return nil
-	})
+			return nil
+		})
+	}(index, keys)
 }
 wg.Wait()
 ```
