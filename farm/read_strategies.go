@@ -9,6 +9,7 @@ import (
 
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
+
 	"github.com/tsenart/tb"
 )
 

@@ -176,6 +176,7 @@ func newFarm(
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("%d write cluster(s), %d read cluster(s)", len(writeClusters), len(readClusters))
 
 	writeQuorum, err := evaluateScalarPercentage(
 		writeQuorumStr,

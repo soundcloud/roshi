@@ -2,6 +2,7 @@ package farm
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -67,6 +68,14 @@ func ParseFarmString(
 		if !writeOnly {
 			readClusters = append(readClusters, cluster)
 		}
+
+		msg := fmt.Sprintf("cluster %d: %d instance(s)", i+1, len(hostPorts))
+		if writeOnly {
+			msg += ", write only!"
+		} else {
+			msg += ", read+write"
+		}
+		log.Print(msg)
 	}
 
 	duplicates := []string{}

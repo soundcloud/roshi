@@ -1,11 +1,13 @@
 package farm
 
 import (
-	"github.com/soundcloud/roshi/instrumentation"
-	"github.com/soundcloud/roshi/pool"
-
+	"io/ioutil"
+	"log"
 	"testing"
 	"time"
+
+	"github.com/soundcloud/roshi/instrumentation"
+	"github.com/soundcloud/roshi/pool"
 )
 
 func TestStripWhitespace(t *testing.T) {
@@ -35,6 +37,7 @@ func TestStripWhitespace(t *testing.T) {
 }
 
 func TestParseFarmString(t *testing.T) {
+	log.SetOutput(ioutil.Discard)
 	for farmString, expected := range map[string]struct {
 		success          bool
 		numWriteClusters int
