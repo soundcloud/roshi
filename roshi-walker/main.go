@@ -43,7 +43,7 @@ func main() {
 		statsdAddress           = flag.String("statsd.address", "", "Statsd address (blank to disable)")
 		statsdSampleRate        = flag.Float64("statsd.sample.rate", 0.1, "Statsd sample rate for normal metrics")
 		statsdBucketPrefix      = flag.String("statsd.bucket.prefix", "myservice.", "Statsd bucket key prefix, including trailing period")
-		prometheusNamespace     = flag.String("prometheus.namespace", "roshiserver", "Prometheus key namespace, excluding trailing punctuation")
+		prometheusNamespace     = flag.String("prometheus.namespace", "roshiwalker", "Prometheus key namespace, excluding trailing punctuation")
 		prometheusMaxSummaryAge = flag.Duration("prometheus.max.summary.age", 10*time.Second, "Prometheus max age for instantaneous histogram data")
 		httpAddress             = flag.String("http.address", ":6060", "HTTP listen address (profiling/metrics endpoints only)")
 	)
