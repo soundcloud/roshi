@@ -78,9 +78,7 @@ If the remove set element timestamp is lower than the new element timestamp,
 delete the element from the remove set and add the new element to the add set.
 If the remove set element timestamp is higher than the new element timestamp,
 do nothing. The same process is applied with interchanged remove/add sets when
-removing an element. In contrast to the formal description above, the Roshi
-approach allows for the same element to be added again (with a higher
-timestamp) after it's been removed.
+removing an element.
 
 Below are all possible combinations of add and remove operations.
 A(elements...) is the state of the add set. R(elements...) is the state of
@@ -102,9 +100,9 @@ A() R(a,1)     | remove(a,0) | A() R(a,1)
 A() R(a,1)     | remove(a,1) | A() R(a,1)
 A() R(a,1)     | remove(a,2) | A() R(a,2)
 
-An element will always be in either the add or the remove set exclusively, but
-never in both and never more than once. This means that the logical set S is
-the same as the add set A.
+For a Roshi LWW-element-set, an element will always be in either the add or
+the remove set exclusively, but never in both and never more than once. This
+means that the logical set S is the same as the add set A.
 
 Every key in Roshi represents a set. Each set is its own LWW-element-set.
 
