@@ -19,8 +19,7 @@ func init() {
 
 // Farm implements CRDT-semantic ZSET methods over many clusters.
 type Farm struct {
-	writeClusters   []cluster.Cluster
-	readClusters    []cluster.Cluster
+	clusters        []cluster.Cluster
 	writeQuorum     int
 	readStrategy    coreReadStrategy
 	repairStrategy  coreRepairStrategy
@@ -38,7 +37,7 @@ type Farm struct {
 //
 // Instrumentation may be nil; all other parameters are required.
 func New(
-	writeClusters, readClusters []cluster.Cluster,
+	clusters []cluster.Cluster,
 	writeQuorum int,
 	readStrategy ReadStrategy,
 	repairStrategy RepairStrategy,
@@ -48,10 +47,9 @@ func New(
 		instr = instrumentation.NopInstrumentation{}
 	}
 	farm := &Farm{
-		writeClusters:   writeClusters,
-		readClusters:    readClusters,
+		clusters:        clusters,
 		writeQuorum:     writeQuorum,
-		repairStrategy:  repairStrategy(readClusters, instr),
+		repairStrategy:  repairStrategy(clusters, instr),
 		instrumentation: instr,
 	}
 	farm.readStrategy = readStrategy(farm)
@@ -111,8 +109,8 @@ func (f *Farm) write(
 	}(time.Now())
 
 	// Scatter
-	errChan := make(chan error, len(f.writeClusters))
-	for _, c := range f.writeClusters {
+	errChan := make(chan error, len(f.clusters))
+	for _, c := range f.clusters {
 		go func(c cluster.Cluster) {
 			errChan <- action(c, tuples)
 		}(c)

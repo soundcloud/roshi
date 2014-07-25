@@ -39,25 +39,24 @@ func TestStripWhitespace(t *testing.T) {
 func TestParseFarmString(t *testing.T) {
 	log.SetOutput(ioutil.Discard)
 	for farmString, expected := range map[string]struct {
-		success          bool
-		numWriteClusters int
-		numReadClusters  int
+		success     bool
+		numClusters int
 	}{
-		"":                                                {false, 0, 0}, // no entries
-		";;;":                                             {false, 0, 0}, // no entries
-		"foo1:1234":                                       {true, 1, 1},
-		"foo1:1234;bar1:1234":                             {true, 2, 2},
-		"foo1:1234;;bar1:1234":                            {false, 0, 0}, // empty middle cluster
-		"foo1,writeonly":                                  {true, 1, 0},  // weird, but allowed
-		"a1:1234,a2:1234;b1:1234,b2:1234":                 {true, 2, 2},
-		"a1:1234,a2:1234; b1:1234,b2:1234 ":               {true, 2, 2},
-		"a1:1234,a2:1234; b1:1234,b2:1234; ":              {false, 0, 0}, // empty last cluster
-		"a1:1234,a2:1234;b1:1234,b2:1234,writeonly":       {true, 2, 1},
-		"a1:1234,a2:1234,a3:1234;b1:1234,b2:1234,b3:1234": {true, 2, 2},
-		"a1:1234,a2:1234 ; b1:1234,b2:1234 ; c1:1234":     {true, 3, 3},
-		"a1:1234,a2:1234 ; a1:1234,b2:1234 ; c1:1234":     {false, 0, 0}, // duplicates
+		"":                                                {false, 0}, // no entries
+		";;;":                                             {false, 0}, // no entries
+		"foo1:1234":                                       {true, 1},
+		"foo1:1234;bar1:1234":                             {true, 2},
+		"foo1:1234;;bar1:1234":                            {false, 0}, // empty middle cluster
+		"foo1,writeonly":                                  {false, 0}, // writeonly is an invalid token now
+		"a1:1234,a2:1234;b1:1234,b2:1234":                 {true, 2},
+		"a1:1234,a2:1234; b1:1234,b2:1234 ":               {true, 2},
+		"a1:1234,a2:1234; b1:1234,b2:1234; ":              {false, 0}, // empty last cluster
+		"a1:1234,a2:1234;b1:1234,b2:1234,writeonly":       {false, 0}, // writeonly is an invalid token now
+		"a1:1234,a2:1234,a3:1234;b1:1234,b2:1234,b3:1234": {true, 2},
+		"a1:1234,a2:1234 ; b1:1234,b2:1234 ; c1:1234":     {true, 3},
+		"a1:1234,a2:1234 ; a1:1234,b2:1234 ; c1:1234":     {false, 0}, // duplicates
 	} {
-		writeClusters, readClusters, err := ParseFarmString(
+		clusters, err := ParseFarmString(
 			farmString,
 			1*time.Second, 1*time.Second, 1*time.Second,
 			1,
@@ -74,11 +73,8 @@ func TestParseFarmString(t *testing.T) {
 			t.Errorf("%q: expected error, got none", farmString)
 			continue
 		}
-		if expected, got := expected.numWriteClusters, len(writeClusters); expected != got {
-			t.Errorf("expected %d write cluster(s), got %d", expected, got)
-		}
-		if expected, got := expected.numReadClusters, len(readClusters); expected != got {
-			t.Errorf("expected %d read cluster(s), got %d", expected, got)
+		if expected, got := expected.numClusters, len(clusters); expected != got {
+			t.Errorf("expected %d cluster(s), got %d", expected, got)
 		}
 	}
 }
