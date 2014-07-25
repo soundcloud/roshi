@@ -162,7 +162,7 @@ func newFarm(
 	selectGap time.Duration,
 	instr instrumentation.Instrumentation,
 ) (*farm.Farm, error) {
-	writeClusters, readClusters, err := farm.ParseFarmString(
+	clusters, err := farm.ParseFarmString(
 		redisInstances,
 		connectTimeout,
 		readTimeout,
@@ -176,19 +176,18 @@ func newFarm(
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("%d write cluster(s), %d read cluster(s)", len(writeClusters), len(readClusters))
+	log.Printf("%d cluster(s)", len(clusters))
 
 	writeQuorum, err := evaluateScalarPercentage(
 		writeQuorumStr,
-		len(writeClusters),
+		len(clusters),
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	return farm.New(
-		writeClusters,
-		readClusters,
+		clusters,
 		writeQuorum,
 		readStrategy,
 		repairStrategy,

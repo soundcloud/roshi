@@ -86,7 +86,7 @@ func main() {
 	}
 
 	// Set up the clusters.
-	writeClusters, readClusters, err := farm.ParseFarmString(
+	clusters, err := farm.ParseFarmString(
 		*redisInstances,
 		*redisConnectTimeout, *redisReadTimeout, *redisWriteTimeout,
 		*redisMCPI,
@@ -111,15 +111,15 @@ func main() {
 	// Build the farm.
 	var (
 		readStrategy   = farm.SendAllReadAll
-		repairStrategy = farm.AllRepairs    // blocking
-		writeQuorum    = len(writeClusters) // 100%
-		dst            = farm.New(writeClusters, readClusters, writeQuorum, readStrategy, repairStrategy, instr)
+		repairStrategy = farm.AllRepairs // blocking
+		writeQuorum    = len(clusters)   // 100%
+		dst            = farm.New(clusters, writeQuorum, readStrategy, repairStrategy, instr)
 	)
 
 	// Perform the walk.
 	defer func(t time.Time) { log.Printf("total walk complete, %s", time.Since(t)) }(time.Now())
 	for {
-		src := scan(readClusters, *batchSize, *scanLogInterval) // new key set
+		src := scan(clusters, *batchSize, *scanLogInterval) // new key set
 		walkOnce(dst, bucket, src, *maxSize, instr)
 		if *once {
 			break

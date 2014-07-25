@@ -14,7 +14,7 @@ func TestAllRepairs(t *testing.T) {
 	// Build farm around mock clusters.
 	n := 5
 	clusters := newMockClusters(n)
-	farm := New(clusters, clusters, (n/2)+1, SendAllReadAll, NoRepairs, nil)
+	farm := New(clusters, (n/2)+1, SendAllReadAll, NoRepairs, nil)
 
 	// Make inserts, no repair.
 	first := common.KeyScoreMember{Key: "foo", Score: 1., Member: "bar"}
@@ -51,7 +51,7 @@ func TestRateLimitedRepairs(t *testing.T) {
 	// Build farm around mock clusters.
 	n := 5
 	clusters := newMockClusters(n)
-	farm := New(clusters, clusters, (n/2)+1, SendAllReadAll, NoRepairs, nil)
+	farm := New(clusters, (n/2)+1, SendAllReadAll, NoRepairs, nil)
 
 	// Make inserts, no repair.
 	a := common.KeyScoreMember{Key: "foo", Score: 1.1, Member: "alpha"}
@@ -92,7 +92,7 @@ func TestExplodingGoroutines(t *testing.T) {
 	// Make a farm.
 	n := 5
 	clusters := newMockClusters(n)
-	farm := New(clusters, clusters, (n/2)+1, SendAllReadAll, AllRepairs, nil)
+	farm := New(clusters, (n/2)+1, SendAllReadAll, AllRepairs, nil)
 
 	// Insert a big key into every cluster except the first.
 	key := "foo"

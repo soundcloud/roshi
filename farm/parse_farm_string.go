@@ -3,6 +3,7 @@ package farm
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,20 +12,14 @@ import (
 	"github.com/soundcloud/roshi/pool"
 )
 
-// ParseFarmString parses a farm declaration string into slices of read- and
-// write-clusters. A farm string is a semicolon-separated list of cluster
-// strings. A cluster string is a comma-separated list of Redis instances.
-// All whitespace is ignored.
-//
-// The special sentinel string "writeonly" (case insensitive) may occur in
-// place of a Redis instance. If it's present, that cluster will receive
-// writes and be counted toward the quorum, but not service any reads. This
-// has an impact on data safety guarantees, and is intended only as a
-// maintenance mode for changing the size of a farm.
+// ParseFarmString parses a farm declaration string into a slice of clusters.
+// A farm string is a semicolon-separated list of cluster strings. A cluster
+// string is a comma-separated list of Redis instances. All whitespace is
+// ignored.
 //
 // An example farm string is:
 //
-//  "foo1:6379,foo2:6379; bar1:6379,bar2:6379,bar3:6379,bar4:6379,WRITEONLY"
+//  "foo1:6379, foo2:6379; bar1:6379, bar2:6379, bar3:6379, bar4:6379"
 //
 func ParseFarmString(
 	farmString string,
@@ -34,48 +29,41 @@ func ParseFarmString(
 	maxSize int,
 	selectGap time.Duration,
 	instr instrumentation.Instrumentation,
-) (writeClusters, readClusters []cluster.Cluster, err error) {
-	seen := map[string]int{}
-
+) ([]cluster.Cluster, error) {
+	var (
+		seen     = map[string]int{}
+		clusters = []cluster.Cluster{}
+	)
 	for i, clusterString := range strings.Split(stripWhitespace(farmString), ";") {
-		var (
-			hostPorts = []string{}
-			writeOnly = false
-		)
+		hostPorts := []string{}
 		for _, hostPort := range strings.Split(clusterString, ",") {
 			if hostPort == "" {
 				continue
 			}
-			if strings.ToLower(hostPort) == "writeonly" {
-				writeOnly = true
-				continue
+			toks := strings.Split(hostPort, ":")
+			if len(toks) != 2 {
+				return []cluster.Cluster{}, fmt.Errorf("invalid host-port %q", hostPort)
+			}
+			if _, err := strconv.ParseUint(toks[1], 10, 16); err != nil {
+				return []cluster.Cluster{}, fmt.Errorf("invalid port %q in host-port %q (%s)", toks[1], hostPort, err)
 			}
 			seen[hostPort]++
 			hostPorts = append(hostPorts, hostPort)
 		}
 		if len(hostPorts) <= 0 {
-			return []cluster.Cluster{}, []cluster.Cluster{}, fmt.Errorf("empty cluster %d (%q)", i+1, clusterString)
+			return []cluster.Cluster{}, fmt.Errorf("empty cluster %d (%q)", i+1, clusterString)
 		}
-
-		cluster := cluster.New(
+		clusters = append(clusters, cluster.New(
 			pool.New(hostPorts, connectTimeout, readTimeout, writeTimeout, redisMCPI, hash),
 			maxSize,
 			selectGap,
 			instr,
-		)
+		))
+		log.Printf("cluster %d: %d instance(s)", i+1, len(hostPorts))
+	}
 
-		writeClusters = append(writeClusters, cluster)
-		if !writeOnly {
-			readClusters = append(readClusters, cluster)
-		}
-
-		msg := fmt.Sprintf("cluster %d: %d instance(s)", i+1, len(hostPorts))
-		if writeOnly {
-			msg += ", write only!"
-		} else {
-			msg += ", read+write"
-		}
-		log.Print(msg)
+	if len(clusters) <= 0 {
+		return []cluster.Cluster{}, fmt.Errorf("no clusters specified")
 	}
 
 	duplicates := []string{}
@@ -85,22 +73,10 @@ func ParseFarmString(
 		}
 	}
 	if len(duplicates) > 0 {
-		return []cluster.Cluster{}, []cluster.Cluster{}, fmt.Errorf("duplicate instances found: %s", strings.Join(duplicates, ", "))
+		return []cluster.Cluster{}, fmt.Errorf("duplicate instances found: %s", strings.Join(duplicates, ", "))
 	}
 
-	if len(writeClusters) <= 0 && len(readClusters) <= 0 {
-		return []cluster.Cluster{}, []cluster.Cluster{}, fmt.Errorf("no clusters specified")
-	}
-
-	if len(writeClusters) < len(readClusters) {
-		return []cluster.Cluster{}, []cluster.Cluster{}, fmt.Errorf(
-			"fewer write clusters (%d) than read clusters (%d)",
-			len(writeClusters),
-			len(readClusters),
-		)
-	}
-
-	return writeClusters, readClusters, nil
+	return clusters, nil
 }
 
 func stripWhitespace(src string) string {
