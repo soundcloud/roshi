@@ -40,7 +40,7 @@ func TestInsertSelectKeys(t *testing.T) {
 	}
 
 	// Select everything.
-	ch := c.Select([]string{"foo", "bar", "baz"}, 0, 10)
+	ch := c.SelectOffset([]string{"foo", "bar", "baz"}, 0, 10)
 	m := map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
@@ -72,7 +72,7 @@ func TestInsertSelectKeys(t *testing.T) {
 	}
 
 	// Just select the first element from each key.
-	ch = c.Select([]string{"foo", "bar", "baz"}, 0, 1)
+	ch = c.SelectOffset([]string{"foo", "bar", "baz"}, 0, 1)
 	m = map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
@@ -99,7 +99,7 @@ func TestInsertSelectKeys(t *testing.T) {
 	}
 
 	// Just select the second element from each key.
-	ch = c.Select([]string{"foo", "bar", "baz"}, 1, 1)
+	ch = c.SelectOffset([]string{"foo", "bar", "baz"}, 1, 1)
 	m = map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
@@ -157,7 +157,7 @@ func TestInsertIdempotency(t *testing.T) {
 
 	// An older insert on foo-alpha should be rejected.
 	z.Insert([]common.KeyScoreMember{{"foo", 48, "alpha"}})
-	c := z.Select([]string{"foo"}, 0, 10)
+	c := z.SelectOffset([]string{"foo"}, 0, 10)
 	m := map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
@@ -175,7 +175,7 @@ func TestInsertIdempotency(t *testing.T) {
 
 	// An older delete on foo-alpha should be rejected
 	z.Delete([]common.KeyScoreMember{{"foo", 49, "alpha"}})
-	c = z.Select([]string{"foo"}, 0, 10)
+	c = z.SelectOffset([]string{"foo"}, 0, 10)
 	m = map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
@@ -193,7 +193,7 @@ func TestInsertIdempotency(t *testing.T) {
 
 	// A newer insert on foo-alpha should be accepted.
 	z.Insert([]common.KeyScoreMember{{"foo", 50.2, "alpha"}})
-	c = z.Select([]string{"foo"}, 0, 10)
+	c = z.SelectOffset([]string{"foo"}, 0, 10)
 	m = map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
@@ -211,7 +211,7 @@ func TestInsertIdempotency(t *testing.T) {
 
 	// A newer delete on foo-alpha should be accepted.
 	z.Delete([]common.KeyScoreMember{{"foo", 50.3, "alpha"}})
-	c = z.Select([]string{"foo"}, 0, 10)
+	c = z.SelectOffset([]string{"foo"}, 0, 10)
 	m = map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
@@ -253,7 +253,7 @@ func TestInsertMaxSize(t *testing.T) {
 	}
 
 	// Select everything.
-	c := z.Select([]string{"foo"}, 0, 10)
+	c := z.SelectOffset([]string{"foo"}, 0, 10)
 	m := map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
@@ -279,7 +279,7 @@ func TestInsertMaxSize(t *testing.T) {
 	z.Insert([]common.KeyScoreMember{{"foo", 51, "alpha"}})
 
 	// Should have the same output with an updated score.
-	c = z.Select([]string{"foo"}, 0, 10)
+	c = z.SelectOffset([]string{"foo"}, 0, 10)
 	m = map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
@@ -305,7 +305,7 @@ func TestInsertMaxSize(t *testing.T) {
 	z.Insert([]common.KeyScoreMember{{"foo", 60, "woop"}})
 
 	// Should have new output.
-	c = z.Select([]string{"foo"}, 0, 10)
+	c = z.SelectOffset([]string{"foo"}, 0, 10)
 	m = map[string][]common.KeyScoreMember{}
 	for e := range c {
 		if e.Error != nil {
