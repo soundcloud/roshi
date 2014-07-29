@@ -496,28 +496,19 @@ func pipelineRange(conn redis.Conn, keys []string, offset, limit int) (map[strin
 }
 
 func pipelineRangeByScore(conn redis.Conn, keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
-	var (
-		command     string
-		firstArg    string
-		secondArg   string
-		checkScore  func(float64) bool
-		checkMember func([]byte) bool
-	)
-	if limit >= 0 {
-		// Normal case: starting at cursor, looking backwards (older)
-		command = "ZREVRANGEBYSCORE"
-		firstArg = fmt.Sprint(cursor.Score) // max
-		secondArg = "-inf"                  // min
-		checkScore = func(score float64) bool { return score < cursor.Score }
-		checkMember = func(member []byte) bool { return bytes.Compare(member, cursor.Member) < 0 }
-	} else {
-		// Special case: starting at cursor, looking forwards (newer)
-		command = "ZRANGEBYSCORE"
-		firstArg = fmt.Sprint(cursor.Score) // min
-		secondArg = "+inf"                  // max
-		checkScore = func(score float64) bool { return score > cursor.Score }
-		checkMember = func(member []byte) bool { return bytes.Compare(member, cursor.Member) > 0 }
-		limit = -limit // flip it!
+	if limit < 0 {
+		// TODO maybe change that
+		return map[string][]common.KeyScoreMember{}, fmt.Errorf("negative limit is invalid for cursor-based select")
+	}
+
+	pastCursor := func(score float64, member []byte) bool {
+		if score < cursor.Score {
+			return true
+		}
+		if score == cursor.Score && bytes.Compare([]byte(member), cursor.Member) < 0 {
+			return true
+		}
+		return false
 	}
 
 	// An unlimited number of members may exist at cursor.Score. Luckily,
@@ -530,18 +521,17 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, cursor common.Cursor, 
 
 	var (
 		keysToSelect = keys  // start with all
-		selectLimit  = limit // start with the initial limit
-		maxAttempts  = 3
+		selectLimit  = limit // double every time
+		maxAttempts  = 3     // up to this many times
 		results      = map[string][]common.KeyScoreMember{}
 	)
 	for attempt := 0; len(keysToSelect) > 0 && attempt < maxAttempts; attempt++ {
-
-		for _, key := range keys {
+		for _, key := range keysToSelect {
 			if err := conn.Send(
-				command,
+				"ZREVRANGEBYSCORE",
 				key+insertSuffix,
-				firstArg,
-				secondArg,
+				fmt.Sprint(cursor.Score), // max
+				"-inf", // min
 				"WITHSCORES",
 				"LIMIT",
 				0,
@@ -556,13 +546,17 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, cursor common.Cursor, 
 		}
 
 		m := make(map[string][]common.KeyScoreMember, len(keys))
-		for _, key := range keys {
+		for _, key := range keysToSelect {
 			values, err := redis.Values(conn.Receive())
 			if err != nil {
 				return map[string][]common.KeyScoreMember{}, err
 			}
 
-			keyScoreMembers := make([]common.KeyScoreMember, 0, len(values))
+			var (
+				collected = 0
+				validated = make([]common.KeyScoreMember, 0, len(values))
+			)
+
 			for len(values) > 0 {
 				var member string
 				var score float64
@@ -570,29 +564,44 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, cursor common.Cursor, 
 					return map[string][]common.KeyScoreMember{}, err
 				}
 
-				if !(checkScore(score) && checkMember([]byte(member))) {
-					continue // this element is still behind our cursor
+				collected++
+
+				if !pastCursor(score, []byte(member)) {
+					continue // this element is still behind or at our cursor
 				}
 
-				keyScoreMembers = append(keyScoreMembers, common.KeyScoreMember{Key: key, Score: score, Member: member})
+				validated = append(validated, common.KeyScoreMember{Key: key, Score: score, Member: member})
 			}
-			m[key] = keyScoreMembers
+
+			// At this point, we know if we can use these elements, or need to
+			// go back for more.
+			var (
+				haveEnoughElements = len(validated) >= limit
+				exhaustedElements  = collected < selectLimit
+			)
+			if haveEnoughElements || exhaustedElements {
+				if len(validated) > limit {
+					validated = validated[:limit]
+				}
+				m[key] = validated
+			}
 		}
 
-		keysToSelect = []string{}
-		for key, a := range m {
-			if len(a) >= limit { // TODO(pb): this isn't a good-enough check
-				results[key] = a // pass
+		retryKeys := make([]string, 0, len(keysToSelect))
+		for _, key := range keysToSelect {
+			if a, ok := m[key]; ok {
+				results[key] = a // use it
 			} else {
-				keysToSelect = append(keysToSelect, key) // fail
+				retryKeys = append(retryKeys, key) // try again
 			}
 		}
+		keysToSelect = retryKeys
 		selectLimit *= 2
 	}
 
-	// TODO(pb): we should issue an error if we failed to return enough
-	// elements, but I'm not sure right now how to detect failure due to too
-	// many members with the same score, vs. simply exhausting the ZSET.
+	if n := len(keysToSelect); n > 0 {
+		return map[string][]common.KeyScoreMember{}, fmt.Errorf("%d key(s) failed to yield enough elements", n)
+	}
 
 	return results, nil
 }

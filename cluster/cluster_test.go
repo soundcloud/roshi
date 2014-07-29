@@ -2,6 +2,7 @@ package cluster_test
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"reflect"
 	"strings"
@@ -373,11 +374,14 @@ func TestSelectCursor(t *testing.T) {
 		{"foo", 33.7, "sigma"},
 		{"foo", 34.8, "omicron"},
 		{"foo", 35.9, "nu"},
+		{"bar", 66.6, "rho"},
+		{"bar", 33.3, "psi"},
+		{"bar", 99.9, "tau"},
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	// A real element cursor, in the normal direction.
+	// Middle of the list, a real element cursor.
 	ch := c.SelectCursor([]string{"foo"}, common.Cursor{Score: 45.4, Member: []byte("gamma")}, 100)
 	expected := []common.KeyScoreMember{
 		{"foo", 35.9, "nu"},
@@ -395,6 +399,133 @@ func TestSelectCursor(t *testing.T) {
 	}
 	if _, ok := <-ch; ok {
 		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
+	}
+
+	// Top of the list.
+	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: math.MaxFloat64, Member: []byte{}}, 100)
+	expected = []common.KeyScoreMember{
+		{"foo", 99.2, "beta"},
+		{"foo", 76.6, "iota"},
+		{"foo", 50.1, "alpha"},
+		{"foo", 45.4, "gamma"},
+		{"foo", 35.9, "nu"},
+		{"foo", 34.8, "omicron"},
+		{"foo", 33.7, "sigma"},
+		{"foo", 21.5, "kappa"},
+		{"foo", 11.3, "delta"},
+	}
+	e = <-ch
+	if e.Error != nil {
+		t.Fatalf("key %q: %s", e.Key, e.Error)
+	}
+	if got := e.KeyScoreMembers; !reflect.DeepEqual(expected, got) {
+		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
+	}
+	if _, ok := <-ch; ok {
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
+	}
+
+	// Restricted limit.
+	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: 50.1, Member: []byte("alpha")}, 3)
+	expected = []common.KeyScoreMember{
+		{"foo", 45.4, "gamma"},
+		{"foo", 35.9, "nu"},
+		{"foo", 34.8, "omicron"},
+	}
+	e = <-ch
+	if e.Error != nil {
+		t.Fatalf("key %q: %s", e.Key, e.Error)
+	}
+	if got := e.KeyScoreMembers; !reflect.DeepEqual(expected, got) {
+		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
+	}
+	if _, ok := <-ch; ok {
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
+	}
+
+	// Multiple keys, top of the list, all elements.
+	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: math.MaxFloat64, Member: []byte("")}, 100)
+	m := map[string][]common.KeyScoreMember{}
+	for e := range ch {
+		if e.Error != nil {
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
+		}
+		m[e.Key] = e.KeyScoreMembers
+	}
+	for key, expected := range map[string][]common.KeyScoreMember{
+		"foo": []common.KeyScoreMember{
+			{"foo", 99.2, "beta"},
+			{"foo", 76.6, "iota"},
+			{"foo", 50.1, "alpha"},
+			{"foo", 45.4, "gamma"},
+			{"foo", 35.9, "nu"},
+			{"foo", 34.8, "omicron"},
+			{"foo", 33.7, "sigma"},
+			{"foo", 21.5, "kappa"},
+			{"foo", 11.3, "delta"},
+		},
+		"bar": []common.KeyScoreMember{
+			{"bar", 99.9, "tau"},
+			{"bar", 66.6, "rho"},
+			{"bar", 33.3, "psi"},
+		},
+	} {
+		if got := m[key]; !reflect.DeepEqual(expected, got) {
+			t.Errorf("key %q: expected \n\t%v, got \n\t%v", key, expected, got)
+			continue
+		}
+	}
+
+	// Multiple keys, middle of the list, all elements.
+	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: 66.6, Member: []byte("rho")}, 100)
+	m = map[string][]common.KeyScoreMember{}
+	for e := range ch {
+		if e.Error != nil {
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
+		}
+		m[e.Key] = e.KeyScoreMembers
+	}
+	for key, expected := range map[string][]common.KeyScoreMember{
+		"foo": []common.KeyScoreMember{
+			{"foo", 50.1, "alpha"},
+			{"foo", 45.4, "gamma"},
+			{"foo", 35.9, "nu"},
+			{"foo", 34.8, "omicron"},
+			{"foo", 33.7, "sigma"},
+			{"foo", 21.5, "kappa"},
+			{"foo", 11.3, "delta"},
+		},
+		"bar": []common.KeyScoreMember{
+			{"bar", 33.3, "psi"},
+		},
+	} {
+		if got := m[key]; !reflect.DeepEqual(expected, got) {
+			t.Errorf("key %q: expected \n\t%v, got \n\t%v", key, expected, got)
+			continue
+		}
+	}
+
+	// Multiple keys, middle of the list, limited elements.
+	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: 66.6, Member: []byte("rho")}, 1)
+	m = map[string][]common.KeyScoreMember{}
+	for e := range ch {
+		if e.Error != nil {
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
+		}
+		m[e.Key] = e.KeyScoreMembers
+	}
+	for key, expected := range map[string][]common.KeyScoreMember{
+		"foo": []common.KeyScoreMember{
+			{"foo", 50.1, "alpha"},
+		},
+		"bar": []common.KeyScoreMember{
+			{"bar", 33.3, "psi"},
+		},
+	} {
+		if got := m[key]; !reflect.DeepEqual(expected, got) {
+			t.Errorf("key %q: expected \n\t%v, got \n\t%v", key, expected, got)
+			continue
+		}
 	}
 }
 
