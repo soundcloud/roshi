@@ -14,7 +14,7 @@ import (
 	"github.com/soundcloud/roshi/pool"
 )
 
-func TestInsertSelectKeys(t *testing.T) {
+func TestInsertSelectOffsetKeys(t *testing.T) {
 	addresses := os.Getenv("TEST_REDIS_ADDRESSES")
 	if addresses == "" {
 		t.Logf("To run this test, set the TEST_REDIS_ADDRESSES environment variable")
@@ -349,6 +349,52 @@ func TestJSONMarshalling(t *testing.T) {
 			jsonData,
 			unmarshalledKSM,
 		)
+	}
+}
+
+func TestSelectCursor(t *testing.T) {
+	addresses := os.Getenv("TEST_REDIS_ADDRESSES")
+	if addresses == "" {
+		t.Logf("To run this test, set the TEST_REDIS_ADDRESSES environment variable")
+		return
+	}
+
+	// Build a new cluster with a high max size.
+	c := integrationCluster(t, addresses, 1000)
+
+	// Make a bunch of inserts.
+	if err := c.Insert([]common.KeyScoreMember{
+		{"foo", 50.1, "alpha"},
+		{"foo", 99.2, "beta"},
+		{"foo", 11.3, "delta"},
+		{"foo", 45.4, "gamma"},
+		{"foo", 21.5, "kappa"},
+		{"foo", 76.6, "iota"},
+		{"foo", 33.7, "sigma"},
+		{"foo", 34.8, "omicron"},
+		{"foo", 35.9, "nu"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// A real element cursor, in the normal direction.
+	ch := c.SelectCursor([]string{"foo"}, common.Cursor{Score: 45.4, Member: []byte("gamma")}, 100)
+	expected := []common.KeyScoreMember{
+		{"foo", 35.9, "nu"},
+		{"foo", 34.8, "omicron"},
+		{"foo", 33.7, "sigma"},
+		{"foo", 21.5, "kappa"},
+		{"foo", 11.3, "delta"},
+	}
+	e := <-ch
+	if e.Error != nil {
+		t.Fatalf("key %q: %s", e.Key, e.Error)
+	}
+	if got := e.KeyScoreMembers; !reflect.DeepEqual(expected, got) {
+		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
+	}
+	if _, ok := <-ch; ok {
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
 	}
 }
 

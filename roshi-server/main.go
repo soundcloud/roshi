@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	_ "expvar"
 	"flag"
@@ -384,6 +385,33 @@ func evaluateScalarPercentage(s string, n int) (int, error) {
 
 type keyScoreMembers []common.KeyScoreMember
 
-func (a keyScoreMembers) Len() int           { return len(a) }
-func (a keyScoreMembers) Less(i, j int) bool { return a[i].Score > a[j].Score }
-func (a keyScoreMembers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a keyScoreMembers) Len() int      { return len(a) }
+func (a keyScoreMembers) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+
+// These two sort types copy the sorting that Redis does internally.
+//
+// ZREVRANGEBYSCORE (normal, limit >= 0, new-to-old): highest score first,
+// then reverse lexicographical of members.
+//
+// ZRANGEBYSCORE (special, limit < 0, old-to-new): lowest score first, then
+// forward lexicographical of members.
+
+type newToOld struct{ keyScoreMembers }
+
+func (a newToOld) Less(i, j int) bool {
+	if a.keyScoreMembers[i].Score != a.keyScoreMembers[j].Score {
+		return a.keyScoreMembers[i].Score > a.keyScoreMembers[j].Score // higher score = newer
+	}
+	// If same score, sort from from z -> a
+	return bytes.Compare([]byte(a.keyScoreMembers[i].Member), []byte(a.keyScoreMembers[j].Member)) > 0
+}
+
+type oldToNew struct{ keyScoreMembers }
+
+func (a oldToNew) Less(i, j int) bool {
+	if a.keyScoreMembers[i].Score != a.keyScoreMembers[j].Score {
+		return a.keyScoreMembers[i].Score < a.keyScoreMembers[j].Score // lower score = older
+	}
+	// If same score, sort from from a -> z
+	return bytes.Compare([]byte(a.keyScoreMembers[i].Member), []byte(a.keyScoreMembers[j].Member)) < 0
+}

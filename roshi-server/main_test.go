@@ -292,6 +292,10 @@ func TestHandleDelete(t *testing.T) {
 	}
 }
 
+func TestFlattenOrdering(t *testing.T) {
+	// TODO(pb): need flattenOffset and flattenCursor
+}
+
 func fixtureServer() *httptest.Server {
 	farm := newMockFarm()
 	farm.Insert([]common.KeyScoreMember{

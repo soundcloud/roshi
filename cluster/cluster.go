@@ -3,6 +3,7 @@
 package cluster
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"math/rand"
@@ -38,10 +39,10 @@ type Inserter interface {
 	Insert(tuples []common.KeyScoreMember) error
 }
 
-// Selecter defines the method to retrieve elements from a sorted set.
+// Selecter defines the methods to retrieve elements from a sorted set.
 type Selecter interface {
 	SelectOffset(keys []string, offset, limit int) <-chan Element
-	SelectCursor(keys []string, cursor float64, limit int) <-chan Element
+	SelectCursor(keys []string, cursor common.Cursor, limit int) <-chan Element
 }
 
 // Deleter defines the method to delete elements from a sorted set. A key-
@@ -181,20 +182,12 @@ func (c *cluster) Insert(keyScoreMembers []common.KeyScoreMember) error {
 // using the offset and limit for each. It pushes results to the returned chan
 // as they become available.
 func (c *cluster) SelectOffset(keys []string, offset, limit int) <-chan Element {
-	// In the walker, we pass limit=MaxInt to specify "all possible members"
-	if limit > c.maxSize {
-		limit = c.maxSize
-	}
 	return c.selectCommon(keys, func(conn redis.Conn) (map[string][]common.KeyScoreMember, error) {
 		return pipelineRange(conn, keys, offset, limit)
 	})
 }
 
-func (c *cluster) SelectCursor(keys []string, cursor float64, limit int) <-chan Element {
-	// ibid.
-	if limit > c.maxSize {
-		limit = c.maxSize
-	}
+func (c *cluster) SelectCursor(keys []string, cursor common.Cursor, limit int) <-chan Element {
 	return c.selectCommon(keys, func(conn redis.Conn) (map[string][]common.KeyScoreMember, error) {
 		return pipelineRangeByScore(conn, keys, cursor, limit)
 	})
@@ -462,7 +455,9 @@ func successElements(m map[string][]common.KeyScoreMember) []Element {
 }
 
 func pipelineRange(conn redis.Conn, keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error) {
-	// TODO(pb): support negative limit, as in pipelineRevRange
+	if limit < 0 {
+		return map[string][]common.KeyScoreMember{}, fmt.Errorf("negative limit is invalid for offset-based select")
+	}
 	for _, key := range keys {
 		if err := conn.Send(
 			"ZREVRANGE",
@@ -500,64 +495,108 @@ func pipelineRange(conn redis.Conn, keys []string, offset, limit int) (map[strin
 	return m, nil
 }
 
-func pipelineRangeByScore(conn redis.Conn, keys []string, cursor float64, limit int) (map[string][]common.KeyScoreMember, error) {
+func pipelineRangeByScore(conn redis.Conn, keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
 	var (
-		command   string
-		firstArg  string
-		secondArg string
+		command     string
+		firstArg    string
+		secondArg   string
+		checkScore  func(float64) bool
+		checkMember func([]byte) bool
 	)
 	if limit >= 0 {
 		// Normal case: starting at cursor, looking backwards (older)
 		command = "ZREVRANGEBYSCORE"
-		firstArg = fmt.Sprint(cursor) // max
-		secondArg = "-inf"            // min
+		firstArg = fmt.Sprint(cursor.Score) // max
+		secondArg = "-inf"                  // min
+		checkScore = func(score float64) bool { return score < cursor.Score }
+		checkMember = func(member []byte) bool { return bytes.Compare(member, cursor.Member) < 0 }
 	} else {
 		// Special case: starting at cursor, looking forwards (newer)
 		command = "ZRANGEBYSCORE"
-		firstArg = fmt.Sprint(cursor) // min
-		secondArg = "+inf"            // max
-		limit = -limit                // flip it!
-	}
-	// TODO(pb): cursor must be ScoreMember tuple
-	for _, key := range keys {
-		if err := conn.Send(
-			command,
-			key+insertSuffix,
-			firstArg,
-			secondArg,
-			"WITHSCORES",
-			"LIMIT",
-			0,
-			limit,
-		); err != nil {
-			return map[string][]common.KeyScoreMember{}, err
-		}
+		firstArg = fmt.Sprint(cursor.Score) // min
+		secondArg = "+inf"                  // max
+		checkScore = func(score float64) bool { return score > cursor.Score }
+		checkMember = func(member []byte) bool { return bytes.Compare(member, cursor.Member) > 0 }
+		limit = -limit // flip it!
 	}
 
-	if err := conn.Flush(); err != nil {
-		return map[string][]common.KeyScoreMember{}, err
-	}
+	// An unlimited number of members may exist at cursor.Score. Luckily,
+	// they're in lexicographically stable order. Walk the elements we get
+	// back. For as long as element.Score == cursor.Score, and a
+	// lexicographical comparison of (element.Score, cursor.Score) < 0,
+	// discard the element. As soon as that condition fails, break the loop,
+	// and collect elements. If we run out of elements before collecting the
+	// user-requested limit, double the limit and try again, up to N times.
 
-	m := make(map[string][]common.KeyScoreMember, len(keys))
-	for _, key := range keys {
-		values, err := redis.Values(conn.Receive())
-		if err != nil {
-			return map[string][]common.KeyScoreMember{}, err
-		}
+	var (
+		keysToSelect = keys  // start with all
+		selectLimit  = limit // start with the initial limit
+		maxAttempts  = 3
+		results      = map[string][]common.KeyScoreMember{}
+	)
+	for attempt := 0; len(keysToSelect) > 0 && attempt < maxAttempts; attempt++ {
 
-		keyScoreMembers := make([]common.KeyScoreMember, 0, len(values))
-		for len(values) > 0 {
-			var member string
-			var score float64
-			if values, err = redis.Scan(values, &member, &score); err != nil {
+		for _, key := range keys {
+			if err := conn.Send(
+				command,
+				key+insertSuffix,
+				firstArg,
+				secondArg,
+				"WITHSCORES",
+				"LIMIT",
+				0,
+				selectLimit,
+			); err != nil {
 				return map[string][]common.KeyScoreMember{}, err
 			}
-			keyScoreMembers = append(keyScoreMembers, common.KeyScoreMember{Key: key, Score: score, Member: member})
 		}
-		m[key] = keyScoreMembers
+
+		if err := conn.Flush(); err != nil {
+			return map[string][]common.KeyScoreMember{}, err
+		}
+
+		m := make(map[string][]common.KeyScoreMember, len(keys))
+		for _, key := range keys {
+			values, err := redis.Values(conn.Receive())
+			if err != nil {
+				return map[string][]common.KeyScoreMember{}, err
+			}
+
+			keyScoreMembers := make([]common.KeyScoreMember, 0, len(values))
+			for len(values) > 0 {
+				var member string
+				var score float64
+				if values, err = redis.Scan(values, &member, &score); err != nil {
+					return map[string][]common.KeyScoreMember{}, err
+				}
+
+				if !(checkScore(score) && checkMember([]byte(member))) {
+					continue // this element is still behind our cursor
+				}
+
+				keyScoreMembers = append(keyScoreMembers, common.KeyScoreMember{Key: key, Score: score, Member: member})
+			}
+			m[key] = keyScoreMembers
+		}
+
+		keysToSelect = []string{}
+		for key, a := range m {
+			if len(a) >= limit { // TODO(pb): this isn't a good-enough check
+				results[key] = a // pass
+			} else {
+				keysToSelect = append(keysToSelect, key) // fail
+			}
+		}
+		selectLimit *= 2
 	}
-	return m, nil
+
+	// TODO(pb): we should issue an error if we failed to return enough
+	// elements, but I'm not sure right now how to detect failure due to too
+	// many members with the same score, vs. simply exhausting the ZSET.
+
+	return results, nil
 }
+
 func pipelineDelete(conn redis.Conn, keyScoreMembers []common.KeyScoreMember, maxSize int) error {
 	for _, keyScoreMember := range keyScoreMembers {
 		if err := deleteScript.Send(
