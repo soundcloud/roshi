@@ -63,7 +63,7 @@ func TestSendOneReadOne(t *testing.T) {
 	farm := New(clusters, len(clusters), SendOneReadOne, MockRepairs(&repairs), nil)
 	farm.Insert([]common.KeyScoreMember{testingKeyScoreMember})
 
-	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
+	result, err := farm.SelectOffset([]string{"key", "nokey"}, 0, 10)
 	if err := checkResult(result, err); err != nil {
 		t.Error(err)
 	}
@@ -84,7 +84,7 @@ func TestSendAllReadAll(t *testing.T) {
 	farm := New(clusters, len(clusters), SendAllReadAll, MockRepairs(&repairs), nil)
 	farm.Insert([]common.KeyScoreMember{testingKeyScoreMember})
 
-	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
+	result, err := farm.SelectOffset([]string{"key", "nokey"}, 0, 10)
 	if err := checkResult(result, err); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestSendAllReadAll(t *testing.T) {
 	// Now delete the ksm from one cluster and then read it again,
 	// triggering a repair.
 	clusters[0].Delete([]common.KeyScoreMember{testingKeyScoreMember})
-	result, err = farm.Select([]string{"key", "nokey"}, 0, 10)
+	result, err = farm.SelectOffset([]string{"key", "nokey"}, 0, 10)
 	if err := checkResult(result, err); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestSendAllReadAll(t *testing.T) {
 	// Now replace cluster 0 with a failing one. No repairs should
 	// happen. Result should still be returned as normal.
 	clusters[0] = newFailingMockCluster()
-	result, err = farm.Select([]string{"key", "nokey"}, 0, 10)
+	result, err = farm.SelectOffset([]string{"key", "nokey"}, 0, 10)
 	if err := checkResult(result, err); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestSendAllReadAll(t *testing.T) {
 	clusters[1].Insert([]common.KeyScoreMember{
 		common.KeyScoreMember{Key: "key", Score: 3.1, Member: "member"},
 	})
-	result, err = farm.Select([]string{"key", "nokey"}, 0, 10)
+	result, err = farm.SelectOffset([]string{"key", "nokey"}, 0, 10)
 	if err := checkResult(result, err); err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	farm := New(clusters, len(clusters), SendAllReadFirstLinger, MockRepairs(&repairs), nil)
 	farm.Insert([]common.KeyScoreMember{testingKeyScoreMember})
 
-	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
+	result, err := farm.SelectOffset([]string{"key", "nokey"}, 0, 10)
 	// Sleep to give the "lingering" goroutine a chance to run.
 	time.Sleep(time.Millisecond)
 	if err := checkResult(result, err); err != nil {
@@ -177,7 +177,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	// randomly come from cluster 0 or another one (that still has
 	// the ksm).
 	clusters[0].Delete([]common.KeyScoreMember{testingKeyScoreMember})
-	_, err = farm.Select([]string{"key", "nokey"}, 0, 10)
+	_, err = farm.SelectOffset([]string{"key", "nokey"}, 0, 10)
 	if err != nil {
 		t.Error(err)
 	}
@@ -193,7 +193,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	// Now replace cluster 0 with a failing one. No repairs should
 	// happen. Result should again be returned reproducibly.
 	clusters[0] = newFailingMockCluster()
-	result, err = farm.Select([]string{"key", "nokey"}, 0, 10)
+	result, err = farm.SelectOffset([]string{"key", "nokey"}, 0, 10)
 	if err != nil {
 		t.Error(err)
 	}
@@ -223,7 +223,7 @@ func TestSendAllReadFirstLinger(t *testing.T) {
 	clusters[1].Insert([]common.KeyScoreMember{
 		common.KeyScoreMember{Key: "key", Score: 3.1, Member: "member"},
 	})
-	_, err = farm.Select([]string{"key", "nokey"}, 0, 10)
+	_, err = farm.SelectOffset([]string{"key", "nokey"}, 0, 10)
 	// Sleep to give the "lingering" goroutine a chance to run.
 	time.Sleep(time.Millisecond)
 	if err != nil {
@@ -253,7 +253,7 @@ func TestSendVarReadFirstLinger(t *testing.T) {
 	)
 	farm.Insert([]common.KeyScoreMember{testingKeyScoreMember})
 
-	result, err := farm.Select([]string{"key", "nokey"}, 0, 10)
+	result, err := farm.SelectOffset([]string{"key", "nokey"}, 0, 10)
 	// Sleep to give the "lingering" goroutine a chance to run.
 	time.Sleep(time.Millisecond)
 	if err := checkResult(result, err); err != nil {
@@ -267,7 +267,7 @@ func TestSendVarReadFirstLinger(t *testing.T) {
 	}
 
 	// Do the same again (within 1s). This time, it should do SendOne only.
-	result, err = farm.Select([]string{"key", "nokey"}, 0, 10)
+	result, err = farm.SelectOffset([]string{"key", "nokey"}, 0, 10)
 	// Sleep to give the "lingering" goroutine a chance to run.
 	time.Sleep(time.Millisecond)
 	if err := checkResult(result, err); err != nil {
@@ -288,7 +288,7 @@ func TestSendVarReadFirstLinger(t *testing.T) {
 	for i := range clusters {
 		clusters[i] = newFailingMockCluster()
 	}
-	result, err = farm.Select([]string{"key", "nokey"}, 0, 10)
+	result, err = farm.SelectOffset([]string{"key", "nokey"}, 0, 10)
 	// Sleep to give the "lingering" goroutine a chance to run.
 	time.Sleep(time.Millisecond)
 	if err == nil {

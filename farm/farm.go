@@ -21,7 +21,7 @@ func init() {
 type Farm struct {
 	clusters        []cluster.Cluster
 	writeQuorum     int
-	readStrategy    coreReadStrategy
+	selecter        Selecter
 	repairStrategy  coreRepairStrategy
 	instrumentation instrumentation.Instrumentation
 }
@@ -52,7 +52,7 @@ func New(
 		repairStrategy:  repairStrategy(clusters, instr),
 		instrumentation: instr,
 	}
-	farm.readStrategy = readStrategy(farm)
+	farm.selecter = readStrategy(farm)
 	return farm
 }
 
@@ -69,16 +69,17 @@ func (f *Farm) Insert(tuples []common.KeyScoreMember) error {
 
 // Selecter defines a synchronous Select API, implemented by Farm.
 type Selecter interface {
-	Select(keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error)
+	SelectOffset(keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error)
+	SelectCursor(keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error)
 }
 
-// Select invokes the ReadStrategy of the farm.
-func (f *Farm) Select(keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error) {
+// SelectOffset invokes the ReadStrategy of the farm.
+func (f *Farm) SelectOffset(keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error) {
 	// High performance optimization.
 	if len(keys) <= 0 {
 		return map[string][]common.KeyScoreMember{}, nil
 	}
-	return f.readStrategy(keys, offset, limit)
+	return f.selecter.SelectOffset(keys, offset, limit)
 }
 
 // Delete removes each tuple from the underlying clusters, if the score is

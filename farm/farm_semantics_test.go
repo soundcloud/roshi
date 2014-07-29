@@ -21,7 +21,7 @@ func TestInsertSelect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := farm.Select([]string{"foo", "bar", "invalid"}, 0, 10)
+	got, err := farm.SelectOffset([]string{"foo", "bar", "invalid"}, 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestOffsetLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := f.Select([]string{"foo", "bar", "baz", "invalid"}, 1, 1)
+	got, err := f.SelectOffset([]string{"foo", "bar", "baz", "invalid"}, 1, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestSendAllReadAllSelectAfterNoQuorum(t *testing.T) {
 	// But because we have optimistic set-union semantics, Select should return
 	// the written data.
 	expected := map[string][]common.KeyScoreMember{"foo": []common.KeyScoreMember{foo}}
-	got, err := f.Select([]string{"foo"}, 0, 10)
+	got, err := f.SelectOffset([]string{"foo"}, 0, 10)
 	if err != nil {
 		t.Fatalf("expected successful read, but got: %s", err)
 	}

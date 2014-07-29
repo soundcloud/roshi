@@ -171,3 +171,21 @@ func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrume
 		}
 	}
 }
+
+type permitter interface {
+	canHas(n int64) bool
+}
+
+type tokenBucketPermitter struct{ *tb.Bucket }
+
+func (p tokenBucketPermitter) canHas(n int64) bool {
+	if got := p.Bucket.Take(n); got < n {
+		p.Bucket.Put(got)
+		return false
+	}
+	return true
+}
+
+type allowAllPermitter struct{}
+
+func (p allowAllPermitter) canHas(n int64) bool { return true }
