@@ -236,7 +236,6 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 				respondError(w, r.Method, r.URL.String(), http.StatusInternalServerError, err)
 				return
 			}
-
 			cursorResults := map[string][]keyScoreMemberCursor{}
 			for key, keyScoreMembers := range results {
 				keyScoreMemberCursors := make([]keyScoreMemberCursor, len(keyScoreMembers))
@@ -248,7 +247,6 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 				}
 				cursorResults[key] = keyScoreMemberCursors
 			}
-
 			if coalesce {
 				respondSelected(w, flattenCursor(cursorResults, limit), time.Since(began))
 				return
