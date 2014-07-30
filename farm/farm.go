@@ -73,13 +73,22 @@ type Selecter interface {
 	SelectCursor(keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error)
 }
 
-// SelectOffset invokes the ReadStrategy of the farm.
+// SelectOffset satisfies Selecter and invokes the ReadStrategy of the farm.
 func (f *Farm) SelectOffset(keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error) {
 	// High performance optimization.
 	if len(keys) <= 0 {
 		return map[string][]common.KeyScoreMember{}, nil
 	}
 	return f.selecter.SelectOffset(keys, offset, limit)
+}
+
+// SelectCursor satisfies Selecter and invokes the ReadStrategy of the farm.
+func (f *Farm) SelectCursor(keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
+	// High performance optimization.
+	if len(keys) <= 0 {
+		return map[string][]common.KeyScoreMember{}, nil
+	}
+	return f.selecter.SelectCursor(keys, cursor, limit)
 }
 
 // Delete removes each tuple from the underlying clusters, if the score is

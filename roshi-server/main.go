@@ -19,6 +19,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/pat"
+	"github.com/peterbourgon/g2s"
+
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/farm"
@@ -26,9 +29,6 @@ import (
 	"github.com/soundcloud/roshi/instrumentation/prometheus"
 	"github.com/soundcloud/roshi/instrumentation/statsd"
 	"github.com/soundcloud/roshi/pool"
-
-	"github.com/gorilla/pat"
-	"github.com/peterbourgon/g2s"
 )
 
 func main() {
@@ -204,9 +204,6 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 			respondError(w, r.Method, r.URL.String(), http.StatusInternalServerError, err)
 			return
 		}
-		offset := parseInt(r.Form, "offset", 0)
-		limit := parseInt(r.Form, "limit", 10)
-		coalesce := parseBool(r.Form, "coalesce", false)
 
 		var keys [][]byte
 		defer r.Body.Close()
@@ -214,33 +211,80 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 			respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, err)
 			return
 		}
-
 		keyStrings := make([]string, len(keys))
 		for i := range keys {
 			keyStrings[i] = string(keys[i])
 		}
 
-		var records interface{}
-		if coalesce {
-			// We need to Select from 0 to offset+limit, flatten the map to a
-			// single ordered slice, and then cut off the last limit elements.
-			m, err := selecter.Select(keyStrings, 0, offset+limit)
-			if err != nil {
-				respondError(w, r.Method, r.URL.String(), http.StatusInternalServerError, err)
-				return
-			}
-			records = flatten(m, offset, limit)
-		} else {
-			// We can directly Select using the given offset and limit.
-			m, err := selecter.Select(keyStrings, offset, limit)
-			if err != nil {
-				respondError(w, r.Method, r.URL.String(), http.StatusInternalServerError, err)
-				return
-			}
-			records = m
-		}
+		var (
+			offset, offsetGiven    = parseInt(r.Form, "offset", 0)
+			cursorStr, cursorGiven = parseStr(r.Form, "cursor", "")
+			limit, _               = parseInt(r.Form, "limit", 10)
+			coalesce, _            = parseBool(r.Form, "coalesce", false)
+		)
 
-		respondSelected(w, keys, offset, limit, records, time.Since(began))
+		switch {
+		case !offsetGiven && cursorGiven:
+			// SelectCursor. The presence of `coalesce` has no impact.
+			var cursor common.Cursor
+			if err := cursor.Parse(cursorStr); err != nil {
+				respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, err)
+				return
+			}
+			results, err := selecter.SelectCursor(keyStrings, cursor, limit)
+			if err != nil {
+				respondError(w, r.Method, r.URL.String(), http.StatusInternalServerError, err)
+				return
+			}
+
+			cursorResults := map[string][]keyScoreMemberCursor{}
+			for key, keyScoreMembers := range results {
+				keyScoreMemberCursors := make([]keyScoreMemberCursor, len(keyScoreMembers))
+				for i, keyScoreMember := range keyScoreMembers {
+					keyScoreMemberCursors[i] = keyScoreMemberCursor{
+						KeyScoreMember: keyScoreMember,
+						Cursor:         keyScoreMember.Cursor().String(),
+					}
+				}
+				cursorResults[key] = keyScoreMemberCursors
+			}
+
+			if coalesce {
+				respondSelected(w, flattenCursor(cursorResults, limit), time.Since(began))
+				return
+			}
+			respondSelected(w, cursorResults, time.Since(began))
+			return
+
+		case offsetGiven && !cursorGiven, !offsetGiven && !cursorGiven:
+			// SelectOffset. The offset/limit may be altered by `coalesce`.
+			var (
+				selectOffset = offset
+				selectLimit  = limit
+			)
+			if coalesce {
+				selectOffset = 0
+				selectLimit = offset + limit
+			}
+			results, err := selecter.SelectOffset(keyStrings, selectOffset, selectLimit)
+			if err != nil {
+				respondError(w, r.Method, r.URL.String(), http.StatusInternalServerError, err)
+				return
+			}
+			if coalesce {
+				respondSelected(w, flattenOffset(results, offset, limit), time.Since(began))
+				return
+			}
+			respondSelected(w, results, time.Since(began))
+			return
+
+		case offsetGiven && cursorGiven:
+			respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, fmt.Errorf("cannot specify both offset and cursor"))
+			return
+
+		default:
+			panic("unreachable")
+		}
 	}
 }
 
@@ -282,7 +326,7 @@ func handleDelete(deleter cluster.Deleter) http.HandlerFunc {
 	}
 }
 
-func flatten(m map[string][]common.KeyScoreMember, offset, limit int) []common.KeyScoreMember {
+func flattenOffset(m map[string][]common.KeyScoreMember, offset, limit int) []common.KeyScoreMember {
 	a := []common.KeyScoreMember{}
 	for _, tuples := range m {
 		a = append(a, tuples...)
@@ -298,20 +342,48 @@ func flatten(m map[string][]common.KeyScoreMember, offset, limit int) []common.K
 	return a
 }
 
-func parseInt(values url.Values, key string, defaultValue int) int {
-	value, err := strconv.ParseInt(values.Get(key), 10, 64)
-	if err != nil {
-		return defaultValue
+func flattenCursor(m map[string][]keyScoreMemberCursor, limit int) []keyScoreMemberCursor {
+	a := []keyScoreMemberCursor{}
+	for _, tuples := range m {
+		a = append(a, tuples...)
 	}
-	return int(value)
+	sort.Sort(keyScoreMemberCursors(a))
+	if len(a) > limit {
+		a = a[:limit]
+	}
+	return a
 }
 
-func parseBool(values url.Values, key string, defaultValue bool) bool {
-	value, err := strconv.ParseBool(values.Get(key))
-	if err != nil {
-		return defaultValue
+func parseInt(values url.Values, key string, defaultValue int) (int, bool) {
+	valueStr := values.Get(key)
+	if valueStr == "" {
+		return defaultValue, false
 	}
-	return value
+	value, err := strconv.ParseInt(valueStr, 10, 64)
+	if err != nil {
+		return defaultValue, true
+	}
+	return int(value), true
+}
+
+func parseBool(values url.Values, key string, defaultValue bool) (bool, bool) {
+	valueStr := values.Get(key)
+	if valueStr == "" {
+		return defaultValue, false
+	}
+	value, err := strconv.ParseBool(valueStr)
+	if err != nil {
+		return defaultValue, true
+	}
+	return value, true
+}
+
+func parseStr(values url.Values, key, defaultValue string) (string, bool) {
+	value := values.Get(key)
+	if value == "" {
+		return defaultValue, false
+	}
+	return value, true
 }
 
 func respondInserted(w http.ResponseWriter, n int, duration time.Duration) {
@@ -322,12 +394,9 @@ func respondInserted(w http.ResponseWriter, n int, duration time.Duration) {
 	})
 }
 
-func respondSelected(w http.ResponseWriter, keys [][]byte, offset, limit int, records interface{}, duration time.Duration) {
+func respondSelected(w http.ResponseWriter, records interface{}, duration time.Duration) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"keys":     keys,
-		"offset":   offset,
-		"limit":    limit,
 		"records":  records,
 		"duration": duration.String(),
 	})
@@ -383,35 +452,35 @@ func evaluateScalarPercentage(s string, n int) (int, error) {
 	return value, nil
 }
 
-type keyScoreMembers []common.KeyScoreMember
-
-func (a keyScoreMembers) Len() int      { return len(a) }
-func (a keyScoreMembers) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-
-// These two sort types copy the sorting that Redis does internally.
-//
-// ZREVRANGEBYSCORE (normal, limit >= 0, new-to-old): highest score first,
-// then reverse lexicographical of members.
-//
-// ZRANGEBYSCORE (special, limit < 0, old-to-new): lowest score first, then
-// forward lexicographical of members.
-
-type newToOld struct{ keyScoreMembers }
-
-func (a newToOld) Less(i, j int) bool {
-	if a.keyScoreMembers[i].Score != a.keyScoreMembers[j].Score {
-		return a.keyScoreMembers[i].Score > a.keyScoreMembers[j].Score // higher score = newer
-	}
-	// If same score, sort from from z -> a
-	return bytes.Compare([]byte(a.keyScoreMembers[i].Member), []byte(a.keyScoreMembers[j].Member)) > 0
+type keyScoreMemberCursor struct {
+	common.KeyScoreMember
+	Cursor string `json:"cursor"`
 }
 
-type oldToNew struct{ keyScoreMembers }
+type keyScoreMembers []common.KeyScoreMember
 
-func (a oldToNew) Less(i, j int) bool {
-	if a.keyScoreMembers[i].Score != a.keyScoreMembers[j].Score {
-		return a.keyScoreMembers[i].Score < a.keyScoreMembers[j].Score // lower score = older
+func (a keyScoreMembers) Len() int { return len(a) }
+
+func (a keyScoreMembers) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+
+func (a keyScoreMembers) Less(i, j int) bool {
+	if a[i].Score != a[j].Score {
+		return a[i].Score > a[j].Score // higher score = newer
 	}
-	// If same score, sort from from a -> z
-	return bytes.Compare([]byte(a.keyScoreMembers[i].Member), []byte(a.keyScoreMembers[j].Member)) < 0
+	// If same score, sort from from z -> a
+	return bytes.Compare([]byte(a[i].Member), []byte(a[j].Member)) > 0
+}
+
+type keyScoreMemberCursors []keyScoreMemberCursor
+
+func (a keyScoreMemberCursors) Len() int { return len(a) }
+
+func (a keyScoreMemberCursors) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+
+func (a keyScoreMemberCursors) Less(i, j int) bool {
+	if a[i].Score != a[j].Score {
+		return a[i].Score > a[j].Score // higher score = newer
+	}
+	// If same score, sort from from z -> a
+	return bytes.Compare([]byte(a[i].Member), []byte(a[j].Member)) > 0
 }

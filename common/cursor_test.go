@@ -7,10 +7,10 @@ import (
 
 func TestCursorSerialization(t *testing.T) {
 	for _, cursor := range []Cursor{
-		Cursor{Score: 0.0, Member: []byte(" ")},
-		Cursor{Score: 1.1, Member: []byte(`%20`)},
-		Cursor{Score: 123.456, Member: []byte("abc")},
-		Cursor{Score: 0.00001, Member: []byte("foo\x00bar")}, // catch missing enc.Close()
+		Cursor{Score: 0.0, Member: " "},
+		Cursor{Score: 1.1, Member: `%20`},
+		Cursor{Score: 123.456, Member: "abc"},
+		Cursor{Score: 0.00001, Member: "foo\x00bar"}, // catch missing enc.Close()
 	} {
 		var (
 			s   = cursor.String()

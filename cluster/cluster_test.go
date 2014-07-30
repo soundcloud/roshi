@@ -383,7 +383,7 @@ func TestSelectCursor(t *testing.T) {
 	}
 
 	// Middle of the list, a real element cursor.
-	ch := c.SelectCursor([]string{"foo"}, common.Cursor{Score: 45.4, Member: []byte("gamma")}, 100)
+	ch := c.SelectCursor([]string{"foo"}, common.Cursor{Score: 45.4, Member: "gamma"}, 100)
 	expected := []common.KeyScoreMember{
 		{"foo", 35.9, "nu"},
 		{"foo", 34.8, "omicron"},
@@ -403,7 +403,7 @@ func TestSelectCursor(t *testing.T) {
 	}
 
 	// Top of the list.
-	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: math.MaxFloat64, Member: []byte{}}, 100)
+	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: math.MaxFloat64, Member: ""}, 100)
 	expected = []common.KeyScoreMember{
 		{"foo", 99.2, "beta"},
 		{"foo", 76.6, "iota"},
@@ -427,7 +427,7 @@ func TestSelectCursor(t *testing.T) {
 	}
 
 	// Restricted limit.
-	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: 50.1, Member: []byte("alpha")}, 3)
+	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: 50.1, Member: "alpha"}, 3)
 	expected = []common.KeyScoreMember{
 		{"foo", 45.4, "gamma"},
 		{"foo", 35.9, "nu"},
@@ -445,7 +445,7 @@ func TestSelectCursor(t *testing.T) {
 	}
 
 	// Multiple keys, top of the list, all elements.
-	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: math.MaxFloat64, Member: []byte("")}, 100)
+	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: math.MaxFloat64, Member: ""}, 100)
 	m := map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
@@ -478,7 +478,7 @@ func TestSelectCursor(t *testing.T) {
 	}
 
 	// Multiple keys, middle of the list, all elements.
-	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: 66.6, Member: []byte("rho")}, 100)
+	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: 66.6, Member: "rho"}, 100)
 	m = map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
@@ -507,7 +507,7 @@ func TestSelectCursor(t *testing.T) {
 	}
 
 	// Multiple keys, middle of the list, limited elements.
-	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: 66.6, Member: []byte("rho")}, 1)
+	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: 66.6, Member: "rho"}, 1)
 	m = map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {

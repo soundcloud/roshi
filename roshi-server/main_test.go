@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -332,7 +333,7 @@ func (f *mockFarm) Insert(tuples []common.KeyScoreMember) error {
 	return nil
 }
 
-func (f *mockFarm) Select(keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error) {
+func (f *mockFarm) SelectOffset(keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error) {
 	m := map[string][]common.KeyScoreMember{}
 	for _, key := range keys {
 		m[key] = f.m[key]
@@ -347,6 +348,10 @@ func (f *mockFarm) Select(keys []string, offset, limit int) (map[string][]common
 		}
 	}
 	return m, nil
+}
+
+func (f *mockFarm) SelectCursor(keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
+	return map[string][]common.KeyScoreMember{}, fmt.Errorf("not yet implemented")
 }
 
 func (f *mockFarm) Delete(tuples []common.KeyScoreMember) error {

@@ -11,7 +11,7 @@ import (
 // Cursor is used as part of SelectCursor.
 type Cursor struct {
 	Score  float64
-	Member []byte
+	Member string
 }
 
 const cursorFormat = `%d!%s` // uint64(float64bits(score)) "!" string(base64(member))
@@ -23,7 +23,7 @@ func (c Cursor) String() string {
 		buf = bytes.Buffer{}
 		enc = base64.NewEncoder(base64.StdEncoding, &buf)
 	)
-	if _, err := enc.Write(c.Member); err != nil {
+	if _, err := enc.Write([]byte(c.Member)); err != nil {
 		panic(err)
 	}
 	if err := enc.Close(); err != nil {
@@ -42,13 +42,12 @@ func (c *Cursor) Parse(s string) error {
 	if err != nil {
 		return fmt.Errorf("invalid cursor string (%s)", err)
 	}
-
-	c.Score = math.Float64frombits(score)
-
-	c.Member, err = ioutil.ReadAll(base64.NewDecoder(base64.StdEncoding, bytes.NewReader([]byte(member))))
+	decoded, err := ioutil.ReadAll(base64.NewDecoder(base64.StdEncoding, bytes.NewReader([]byte(member))))
 	if err != nil {
 		return fmt.Errorf("invalid cursor string (%s)", err)
 	}
 
+	c.Score = math.Float64frombits(score)
+	c.Member = string(decoded)
 	return nil
 }

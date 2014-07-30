@@ -188,6 +188,8 @@ func (c *cluster) SelectOffset(keys []string, offset, limit int) <-chan Element 
 	})
 }
 
+// SelectCursor uses ZREVRANGEBYSCORE to do a cursor-based select, similar to
+// SelectOffset.
 func (c *cluster) SelectCursor(keys []string, cursor common.Cursor, limit int) <-chan Element {
 	return c.selectCommon(keys, func(conn redis.Conn) (map[string][]common.KeyScoreMember, error) {
 		return pipelineRangeByScore(conn, keys, cursor, limit)
@@ -506,7 +508,7 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, cursor common.Cursor, 
 		if score < cursor.Score {
 			return true
 		}
-		if score == cursor.Score && bytes.Compare([]byte(member), cursor.Member) < 0 {
+		if score == cursor.Score && bytes.Compare([]byte(member), []byte(cursor.Member)) < 0 {
 			return true
 		}
 		return false
