@@ -2,6 +2,7 @@ package farm
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"strings"
 	"sync"
@@ -103,6 +104,7 @@ func SendAllReadAll(farm *Farm) coreReadStrategy {
 		retrieved := 0
 		for e := range elements {
 			if e.Error != nil {
+				log.Printf("SendAllReadAll partial error: %s", e.Error)
 				go farm.instrumentation.SelectPartialError()
 				continue
 			}
@@ -243,6 +245,7 @@ func SendVarReadFirstLinger(maxKeysPerSecond int, thresholdLatency time.Duration
 					}
 					retrieved += len(e.KeyScoreMembers)
 					if e.Error != nil {
+						log.Printf("SendVarReadFirstLinger initial read partial error: %s", e.Error)
 						go farm.instrumentation.SelectPartialError()
 						continue
 						// It might appear tempting to immediately send a
@@ -340,6 +343,7 @@ func SendVarReadFirstLinger(maxKeysPerSecond int, thresholdLatency time.Duration
 				for e := range elements {
 					lingeringRetrievals += len(e.KeyScoreMembers)
 					if e.Error != nil {
+						log.Printf("SendVarReadFirstLinger lingering retrieval partial error: %s", e.Error)
 						go farm.instrumentation.SelectPartialError()
 						continue
 					}
