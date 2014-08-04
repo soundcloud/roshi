@@ -1,12 +1,12 @@
 package pool_test
 
 import (
-	"os"
 	"os/exec"
 	"testing"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
+
 	"github.com/soundcloud/roshi/pool"
 )
 
@@ -21,7 +21,8 @@ func TestRecovery(t *testing.T) {
 	var (
 		port                      = "10001"
 		maxConnectionsPerInstance = 2
-		redisTimeout              = 1000 * time.Millisecond
+		redisTimeout              = 3 * time.Second
+		redisGracePeriod          = 5 * time.Second
 	)
 	p := pool.New(
 		[]string{"localhost:" + port},
@@ -30,12 +31,6 @@ func TestRecovery(t *testing.T) {
 		pool.Murmur3,
 	)
 
-	waitDuration, err := time.ParseDuration(os.Getenv("TEST_REDIS_WAIT_DURATION"))
-	if err != nil {
-		waitDuration = 100 * time.Millisecond
-	}
-	t.Logf("TEST_REDIS_WAIT_DURATION is %s", waitDuration)
-
 	func() {
 		// Start Redis
 		cmd := exec.Command(absBinary, "--port", port)
@@ -43,7 +38,8 @@ func TestRecovery(t *testing.T) {
 			t.Fatalf("Starting %s: %s", binary, err)
 		}
 		defer cmd.Process.Kill()
-		time.Sleep(waitDuration)
+
+		time.Sleep(redisGracePeriod)
 
 		// Try initial PING
 		if err := p.With("irrelevant", func(conn redis.Conn) error {
@@ -85,7 +81,8 @@ func TestRecovery(t *testing.T) {
 			t.Fatalf("Starting %s: %s", binary, err)
 		}
 		defer cmd.Process.Kill()
-		time.Sleep(waitDuration)
+
+		time.Sleep(redisGracePeriod)
 
 		// Try second PING x1
 		err := p.With("irrelevant", func(conn redis.Conn) error {
