@@ -1,9 +1,9 @@
 # roshi
 
 Roshi implements a time-series event storage via a LWW-element-set CRDT with
-inline garbage collection. Roshi is a stateless, distributed layer on top of
-Redis and is implemented in Go. It is partition tolerant, highly available and
-eventually consistent.
+limited inline garbage collection. Roshi is a stateless, distributed layer on
+top of Redis and is implemented in Go. It is partition tolerant, highly
+available and eventually consistent.
 
 At a high level, Roshi maintains sets of values, with each set ordered
 according to (external) timestamp, newest-first. Roshi provides the following
@@ -53,9 +53,9 @@ Operations on CRDTs need to adhere [to the following rules][mixu]:
 - Idempotence (a+a=a), so that duplication doesn't matter.
 
 Data types as well as operations have to be specifically crafted to meet these
-rules. CRDTs have known implementations for (among others) counters,
-registers, sets, and graphs. Roshi implements a set data type, specifically
-the Last-Writer-Wins-element-set (LWW-element-set).
+rules. CRDTs have known implementations for counters, registers, sets, graphs,
+and others. Roshi implements a set data type, specifically the Last Writer
+Wins element set (LWW-element-set).
 
 This is an intuitive description of the LWW-element-set:
 
@@ -63,7 +63,7 @@ This is an intuitive description of the LWW-element-set:
 - An element is not in the set, if its most-recent operation was a remove.
 
 A more formal description of a LWW-element-set, as informed by
-[Shapiro][shapiro], is as follows: A set S is represented by two internal
+[Shapiro][shapiro], is as follows: a set S is represented by two internal
 sets, the add set A and the remove set R. To add an element e to the set S,
 add a tuple t with the element and the current timestamp t=(e, now()) to A. To
 remove an element from the set S, add a tuple t with the element and the
@@ -71,14 +71,14 @@ current timestamp t=(e, now()) to R. To check if an element e is in the set S,
 check if it is in the add set A and not in the remove set R with a higher
 timestamp.
 
-Roshi implements the above definition, but extends it by applying instant
-garbage collection. When adding an element e to the set, check if the element
-is already in the remove set. If so, check the remove set element timestamp.
-If the remove set element timestamp is lower than the new element timestamp,
-delete the element from the remove set and add the new element to the add set.
-If the remove set element timestamp is higher than the new element timestamp,
-do nothing. The same process is applied with interchanged remove/add sets when
-removing an element.
+Roshi implements the above definition, but extends it by applying a sort of
+instant garbage collection.  When inserting an element E to the logical set S,
+check if E is already in the add set A or the remove set R. If so, check the
+existing timestamp. If the existing timestamp is **lower** than the incoming
+timestamp, the write succeeds: remove the existing (element, timestamp) tuple
+from whichever set it was found in, and add the incoming (element, timestamp)
+tuple to the add set A. If the existing timestamp is higher than the incoming
+timestamp, the write is a no-op.
 
 Below are all possible combinations of add and remove operations.
 A(elements...) is the state of the add set. R(elements...) is the state of
