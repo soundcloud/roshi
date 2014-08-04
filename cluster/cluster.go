@@ -486,8 +486,10 @@ func pipelineRange(conn redis.Conn, keys []string, offset, limit int) (map[strin
 
 		keyScoreMembers := make([]common.KeyScoreMember, 0, len(values))
 		for len(values) > 0 {
-			var member string
-			var score float64
+			var (
+				member string
+				score  float64
+			)
 			if values, err = redis.Scan(values, &member, &score); err != nil {
 				return map[string][]common.KeyScoreMember{}, err
 			}
