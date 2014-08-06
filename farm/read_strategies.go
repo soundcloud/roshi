@@ -2,6 +2,7 @@ package farm
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"strings"
 	"sync"
@@ -136,6 +137,7 @@ func (s sendAllReadAll) read(numKeys int, fn func(cluster.Cluster) <-chan cluste
 	)
 	for e := range elements {
 		if e.Error != nil {
+			log.Printf("SendAllReadAll partial error: %s", e.Error)
 			go s.Farm.instrumentation.SelectPartialError()
 			continue
 		}
@@ -307,6 +309,7 @@ loop:
 			}
 			retrieved += len(e.KeyScoreMembers)
 			if e.Error != nil {
+				log.Printf("SendVarReadFirstLinger initial read partial error: %s", e.Error)
 				go s.Farm.instrumentation.SelectPartialError()
 				continue
 				// It might appear tempting to immediately send a Select to
@@ -409,6 +412,7 @@ loop:
 		for e := range elements {
 			lingeringRetrievals += len(e.KeyScoreMembers)
 			if e.Error != nil {
+				log.Printf("SendVarReadFirstLinger lingering retrieval partial error: %s", e.Error)
 				go s.Farm.instrumentation.SelectPartialError()
 				continue
 			}
