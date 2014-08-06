@@ -1,4 +1,4 @@
-# roshi
+# roshi [![Build Status](https://travis-ci.org/soundcloud/roshi.png)](https://travis-ci.org/soundcloud/roshi) [![GoDoc](https://godoc.org/github.com/soundcloud/roshi?status.svg)](http://godoc.org/github.com/soundcloud/roshi)
 
 Roshi implements a time-series event storage via a LWW-element-set CRDT with
 limited inline garbage collection. Roshi is a stateless, distributed layer on
@@ -18,8 +18,6 @@ instances, called a **cluster**. Roshi provides fault tolerance by duplicating
 clusters; multiple identical clusters, normally at least 3, form a **farm**.
 Roshi leverages CRDT semantics to ensure consistency without explicit
 consensus.
-
-[![Build Status](https://travis-ci.org/soundcloud/roshi.png)](https://travis-ci.org/soundcloud/roshi)
 
 # Use cases
 
