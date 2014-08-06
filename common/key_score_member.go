@@ -18,6 +18,14 @@ type KeyScoreMember struct {
 	Member string
 }
 
+// Cursor generates a cursor for this KeyScoreMember.
+func (ksm KeyScoreMember) Cursor() Cursor {
+	return Cursor{
+		Score:  ksm.Score,
+		Member: ksm.Member,
+	}
+}
+
 // jsonKeyScoreMember is used internally by MarshalJSON and UnmarshalJSON.
 type jsonKeyScoreMember struct {
 	Key    []byte  `json:"key"`
@@ -30,7 +38,11 @@ type jsonKeyScoreMember struct {
 // JSON data; the JSON string encoding is neither efficient nor
 // reliable for arbitrary byte sequences).
 func (ksm KeyScoreMember) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&jsonKeyScoreMember{[]byte(ksm.Key), ksm.Score, []byte(ksm.Member)})
+	return json.Marshal(&jsonKeyScoreMember{
+		Key:    []byte(ksm.Key),
+		Score:  ksm.Score,
+		Member: []byte(ksm.Member),
+	})
 }
 
 // UnmarshalJSON makes sure that the strings in KeyScoreMember are
@@ -38,12 +50,12 @@ func (ksm KeyScoreMember) MarshalJSON() ([]byte, error) {
 // the JSON data; the JSON string encoding is neither efficient nor
 // reliable for arbitrary byte sequences).
 func (ksm *KeyScoreMember) UnmarshalJSON(data []byte) error {
-	var jsonKsm jsonKeyScoreMember
-	err := json.Unmarshal(data, &jsonKsm)
+	var jsonKSM jsonKeyScoreMember
+	err := json.Unmarshal(data, &jsonKSM)
 	if err == nil {
-		ksm.Key = string(jsonKsm.Key)
-		ksm.Score = jsonKsm.Score
-		ksm.Member = string(jsonKsm.Member)
+		ksm.Key = string(jsonKSM.Key)
+		ksm.Score = jsonKSM.Score
+		ksm.Member = string(jsonKSM.Member)
 	}
 	return err
 }

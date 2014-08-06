@@ -29,7 +29,7 @@ func TestAllRepairs(t *testing.T) {
 		if i == 0 {
 			expected = second
 		}
-		if got := <-clusters[i].Select([]string{"foo"}, 0, 10); !reflect.DeepEqual(expected, got.KeyScoreMembers[0]) {
+		if got := <-clusters[i].SelectOffset([]string{"foo"}, 0, 10); !reflect.DeepEqual(expected, got.KeyScoreMembers[0]) {
 			t.Errorf("pre-repair: cluster %d: expected %+v, got %+v", i, expected, got.KeyScoreMembers[0])
 		}
 	}
@@ -41,7 +41,7 @@ func TestAllRepairs(t *testing.T) {
 	expected := second
 	for i := 0; i < n; i++ {
 		//t.Logf("post-repair: cluster %d: %+v", i, clusters[i].(*mockCluster).m)
-		if got := <-clusters[i].Select([]string{"foo"}, 0, 10); !reflect.DeepEqual(expected, got.KeyScoreMembers[0]) {
+		if got := <-clusters[i].SelectOffset([]string{"foo"}, 0, 10); !reflect.DeepEqual(expected, got.KeyScoreMembers[0]) {
 			t.Errorf("post-repair: cluster %d: expected %+v, got %+v", i, expected, got.KeyScoreMembers[0])
 		}
 	}
@@ -77,7 +77,7 @@ func TestRateLimitedRepairs(t *testing.T) {
 	// Make post-repair checks. We only care about clusters 1 and above.
 	expected := []common.KeyScoreMember{e, d, c}
 	for i := 0; i < n; i++ {
-		got := <-clusters[i].Select([]string{"foo"}, 0, 10)
+		got := <-clusters[i].SelectOffset([]string{"foo"}, 0, 10)
 		t.Logf("post-repair: cluster %d: has %+v", i, got.KeyScoreMembers)
 		if i == 0 {
 			continue // assume clusters[0] has everything correctly
@@ -104,7 +104,7 @@ func TestExplodingGoroutines(t *testing.T) {
 
 	// Issue repair by making a Select.
 	before := runtime.NumGoroutine()
-	farm.Select([]string{key}, 0, maxSize)
+	farm.SelectOffset([]string{key}, 0, maxSize)
 	runtime.Gosched()
 	after := runtime.NumGoroutine()
 

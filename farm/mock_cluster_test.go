@@ -29,7 +29,7 @@ func TestMockCluster(t *testing.T) {
 			common.KeyScoreMember{Key: "foo", Score: 1, Member: "bar"},
 		},
 	}
-	ch := c.Select([]string{"foo"}, 0, 10)
+	ch := c.SelectOffset([]string{"foo"}, 0, 10)
 	got := map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
@@ -54,7 +54,7 @@ func TestMockCluster(t *testing.T) {
 			common.KeyScoreMember{Key: "foo", Score: 2, Member: "baz"},
 		},
 	}
-	ch = c.Select([]string{"foo"}, 0, 10)
+	ch = c.SelectOffset([]string{"foo"}, 0, 10)
 	got = map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
@@ -120,7 +120,7 @@ func (c *mockCluster) Insert(keyScoreMembers []common.KeyScoreMember) error {
 	return nil
 }
 
-func (c *mockCluster) Select(keys []string, offset, limit int) <-chan cluster.Element {
+func (c *mockCluster) SelectOffset(keys []string, offset, limit int) <-chan cluster.Element {
 	atomic.AddInt32(&c.countSelect, 1)
 	ch := make(chan cluster.Element)
 	if c.failing {
@@ -154,6 +154,12 @@ func (c *mockCluster) Select(keys []string, offset, limit int) <-chan cluster.El
 			ch <- cluster.Element{Key: key, KeyScoreMembers: slice}
 		}
 	}()
+	return ch
+}
+
+func (c *mockCluster) SelectCursor(keys []string, cursor common.Cursor, limit int) <-chan cluster.Element {
+	ch := make(chan cluster.Element)
+	go func() { close(ch) }()
 	return ch
 }
 

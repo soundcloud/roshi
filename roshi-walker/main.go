@@ -158,7 +158,7 @@ func walkOnce(
 		log.Printf("walk: received batch of %d, requesting tokens", len(batch))
 		wait.Wait(int64(len(batch)))
 		log.Printf("walk: received tokens, performing Select")
-		dst.Select(batch, 0, maxSize)
+		dst.SelectOffset(batch, 0, maxSize)
 		instr.WalkKeys(len(batch))
 		log.Printf("walk: performed Select, waiting for next batch")
 	}

@@ -2,6 +2,7 @@ package cluster_test
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"reflect"
 	"strings"
@@ -9,12 +10,13 @@ import (
 	"time"
 
 	"github.com/garyburd/redigo/redis"
+
 	"github.com/soundcloud/roshi/cluster"
 	"github.com/soundcloud/roshi/common"
 	"github.com/soundcloud/roshi/pool"
 )
 
-func TestInsertSelectKeys(t *testing.T) {
+func TestInsertSelectOffsetKeys(t *testing.T) {
 	addresses := os.Getenv("TEST_REDIS_ADDRESSES")
 	if addresses == "" {
 		t.Logf("To run this test, set the TEST_REDIS_ADDRESSES environment variable")
@@ -40,9 +42,8 @@ func TestInsertSelectKeys(t *testing.T) {
 	}
 
 	// Select everything.
-	ch := c.Select([]string{"foo", "bar", "baz"}, 0, 10)
 	m := map[string][]common.KeyScoreMember{}
-	for e := range ch {
+	for e := range c.SelectOffset([]string{"foo", "bar", "baz"}, 0, 10) {
 		if e.Error != nil {
 			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
@@ -72,9 +73,8 @@ func TestInsertSelectKeys(t *testing.T) {
 	}
 
 	// Just select the first element from each key.
-	ch = c.Select([]string{"foo", "bar", "baz"}, 0, 1)
 	m = map[string][]common.KeyScoreMember{}
-	for e := range ch {
+	for e := range c.SelectOffset([]string{"foo", "bar", "baz"}, 0, 1) {
 		if e.Error != nil {
 			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
@@ -99,9 +99,8 @@ func TestInsertSelectKeys(t *testing.T) {
 	}
 
 	// Just select the second element from each key.
-	ch = c.Select([]string{"foo", "bar", "baz"}, 1, 1)
 	m = map[string][]common.KeyScoreMember{}
-	for e := range ch {
+	for e := range c.SelectOffset([]string{"foo", "bar", "baz"}, 1, 1) {
 		if e.Error != nil {
 			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
@@ -144,10 +143,10 @@ func TestInsertIdempotency(t *testing.T) {
 	}
 
 	// Build a new cluster with a low max size.
-	z := integrationCluster(t, addresses, 3)
+	c := integrationCluster(t, addresses, 3)
 
 	// Make an inserts.
-	if err := z.Insert([]common.KeyScoreMember{
+	if err := c.Insert([]common.KeyScoreMember{
 		{"foo", 50, "alpha"},
 		{"foo", 99, "beta"},
 		{"foo", 11, "delta"},
@@ -156,10 +155,9 @@ func TestInsertIdempotency(t *testing.T) {
 	}
 
 	// An older insert on foo-alpha should be rejected.
-	z.Insert([]common.KeyScoreMember{{"foo", 48, "alpha"}})
-	c := z.Select([]string{"foo"}, 0, 10)
+	c.Insert([]common.KeyScoreMember{{"foo", 48, "alpha"}})
 	m := map[string][]common.KeyScoreMember{}
-	for e := range c {
+	for e := range c.SelectOffset([]string{"foo"}, 0, 10) {
 		if e.Error != nil {
 			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
@@ -174,10 +172,9 @@ func TestInsertIdempotency(t *testing.T) {
 	}
 
 	// An older delete on foo-alpha should be rejected
-	z.Delete([]common.KeyScoreMember{{"foo", 49, "alpha"}})
-	c = z.Select([]string{"foo"}, 0, 10)
+	c.Delete([]common.KeyScoreMember{{"foo", 49, "alpha"}})
 	m = map[string][]common.KeyScoreMember{}
-	for e := range c {
+	for e := range c.SelectOffset([]string{"foo"}, 0, 10) {
 		if e.Error != nil {
 			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
@@ -192,10 +189,9 @@ func TestInsertIdempotency(t *testing.T) {
 	}
 
 	// A newer insert on foo-alpha should be accepted.
-	z.Insert([]common.KeyScoreMember{{"foo", 50.2, "alpha"}})
-	c = z.Select([]string{"foo"}, 0, 10)
+	c.Insert([]common.KeyScoreMember{{"foo", 50.2, "alpha"}})
 	m = map[string][]common.KeyScoreMember{}
-	for e := range c {
+	for e := range c.SelectOffset([]string{"foo"}, 0, 10) {
 		if e.Error != nil {
 			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
@@ -210,10 +206,9 @@ func TestInsertIdempotency(t *testing.T) {
 	}
 
 	// A newer delete on foo-alpha should be accepted.
-	z.Delete([]common.KeyScoreMember{{"foo", 50.3, "alpha"}})
-	c = z.Select([]string{"foo"}, 0, 10)
+	c.Delete([]common.KeyScoreMember{{"foo", 50.3, "alpha"}})
 	m = map[string][]common.KeyScoreMember{}
-	for e := range c {
+	for e := range c.SelectOffset([]string{"foo"}, 0, 10) {
 		if e.Error != nil {
 			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
@@ -235,10 +230,10 @@ func TestInsertMaxSize(t *testing.T) {
 	}
 
 	// Build a new cluster with a low max size.
-	z := integrationCluster(t, addresses, 3)
+	c := integrationCluster(t, addresses, 3)
 
 	// Make a bunch of inserts on a single key.
-	if err := z.Insert([]common.KeyScoreMember{
+	if err := c.Insert([]common.KeyScoreMember{
 		{"foo", 50, "alpha"},
 		{"foo", 99, "beta"},
 		{"foo", 11, "delta"},
@@ -253,9 +248,8 @@ func TestInsertMaxSize(t *testing.T) {
 	}
 
 	// Select everything.
-	c := z.Select([]string{"foo"}, 0, 10)
 	m := map[string][]common.KeyScoreMember{}
-	for e := range c {
+	for e := range c.SelectOffset([]string{"foo"}, 0, 10) {
 		if e.Error != nil {
 			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
@@ -276,12 +270,11 @@ func TestInsertMaxSize(t *testing.T) {
 	}
 
 	// Make another single insert with a new score, overwriting a key.
-	z.Insert([]common.KeyScoreMember{{"foo", 51, "alpha"}})
+	c.Insert([]common.KeyScoreMember{{"foo", 51, "alpha"}})
 
 	// Should have the same output with an updated score.
-	c = z.Select([]string{"foo"}, 0, 10)
 	m = map[string][]common.KeyScoreMember{}
-	for e := range c {
+	for e := range c.SelectOffset([]string{"foo"}, 0, 10) {
 		if e.Error != nil {
 			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
@@ -302,12 +295,11 @@ func TestInsertMaxSize(t *testing.T) {
 	}
 
 	// Make another single insert of a brand new key.
-	z.Insert([]common.KeyScoreMember{{"foo", 60, "woop"}})
+	c.Insert([]common.KeyScoreMember{{"foo", 60, "woop"}})
 
 	// Should have new output.
-	c = z.Select([]string{"foo"}, 0, 10)
 	m = map[string][]common.KeyScoreMember{}
-	for e := range c {
+	for e := range c.SelectOffset([]string{"foo"}, 0, 10) {
 		if e.Error != nil {
 			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
 		}
@@ -349,6 +341,241 @@ func TestJSONMarshalling(t *testing.T) {
 			jsonData,
 			unmarshalledKSM,
 		)
+	}
+}
+
+func TestSelectCursor(t *testing.T) {
+	addresses := os.Getenv("TEST_REDIS_ADDRESSES")
+	if addresses == "" {
+		t.Logf("To run this test, set the TEST_REDIS_ADDRESSES environment variable")
+		return
+	}
+
+	// Build a new cluster.
+	c := integrationCluster(t, addresses, 1000)
+
+	// Make a bunch of inserts.
+	if err := c.Insert([]common.KeyScoreMember{
+		{"foo", 50.1, "alpha"},
+		{"foo", 99.2, "beta"},
+		{"foo", 11.3, "delta"},
+		{"foo", 45.4, "gamma"},
+		{"foo", 21.5, "kappa"},
+		{"foo", 76.6, "iota"},
+		{"foo", 33.7, "sigma"},
+		{"foo", 34.8, "omicron"},
+		{"foo", 35.9, "nu"},
+		{"bar", 66.6, "rho"},
+		{"bar", 33.3, "psi"},
+		{"bar", 99.9, "tau"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Middle of the list, a real element cursor.
+	ch := c.SelectCursor([]string{"foo"}, common.Cursor{Score: 45.4, Member: "gamma"}, 100)
+	expected := []common.KeyScoreMember{
+		{"foo", 35.9, "nu"},
+		{"foo", 34.8, "omicron"},
+		{"foo", 33.7, "sigma"},
+		{"foo", 21.5, "kappa"},
+		{"foo", 11.3, "delta"},
+	}
+	e := <-ch
+	if e.Error != nil {
+		t.Fatalf("key %q: %s", e.Key, e.Error)
+	}
+	if got := e.KeyScoreMembers; !reflect.DeepEqual(expected, got) {
+		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
+	}
+	if _, ok := <-ch; ok {
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
+	}
+
+	// Top of the list.
+	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: math.MaxFloat64, Member: ""}, 100)
+	expected = []common.KeyScoreMember{
+		{"foo", 99.2, "beta"},
+		{"foo", 76.6, "iota"},
+		{"foo", 50.1, "alpha"},
+		{"foo", 45.4, "gamma"},
+		{"foo", 35.9, "nu"},
+		{"foo", 34.8, "omicron"},
+		{"foo", 33.7, "sigma"},
+		{"foo", 21.5, "kappa"},
+		{"foo", 11.3, "delta"},
+	}
+	e = <-ch
+	if e.Error != nil {
+		t.Fatalf("key %q: %s", e.Key, e.Error)
+	}
+	if got := e.KeyScoreMembers; !reflect.DeepEqual(expected, got) {
+		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
+	}
+	if _, ok := <-ch; ok {
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
+	}
+
+	// Restricted limit.
+	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: 50.1, Member: "alpha"}, 3)
+	expected = []common.KeyScoreMember{
+		{"foo", 45.4, "gamma"},
+		{"foo", 35.9, "nu"},
+		{"foo", 34.8, "omicron"},
+	}
+	e = <-ch
+	if e.Error != nil {
+		t.Fatalf("key %q: %s", e.Key, e.Error)
+	}
+	if got := e.KeyScoreMembers; !reflect.DeepEqual(expected, got) {
+		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
+	}
+	if _, ok := <-ch; ok {
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
+	}
+
+	// Multiple keys, top of the list, all elements.
+	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: math.MaxFloat64, Member: ""}, 100)
+	m := map[string][]common.KeyScoreMember{}
+	for e := range ch {
+		if e.Error != nil {
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
+		}
+		m[e.Key] = e.KeyScoreMembers
+	}
+	for key, expected := range map[string][]common.KeyScoreMember{
+		"foo": []common.KeyScoreMember{
+			{"foo", 99.2, "beta"},
+			{"foo", 76.6, "iota"},
+			{"foo", 50.1, "alpha"},
+			{"foo", 45.4, "gamma"},
+			{"foo", 35.9, "nu"},
+			{"foo", 34.8, "omicron"},
+			{"foo", 33.7, "sigma"},
+			{"foo", 21.5, "kappa"},
+			{"foo", 11.3, "delta"},
+		},
+		"bar": []common.KeyScoreMember{
+			{"bar", 99.9, "tau"},
+			{"bar", 66.6, "rho"},
+			{"bar", 33.3, "psi"},
+		},
+	} {
+		if got := m[key]; !reflect.DeepEqual(expected, got) {
+			t.Errorf("key %q: expected \n\t%v, got \n\t%v", key, expected, got)
+			continue
+		}
+	}
+
+	// Multiple keys, middle of the list, all elements.
+	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: 66.6, Member: "rho"}, 100)
+	m = map[string][]common.KeyScoreMember{}
+	for e := range ch {
+		if e.Error != nil {
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
+		}
+		m[e.Key] = e.KeyScoreMembers
+	}
+	for key, expected := range map[string][]common.KeyScoreMember{
+		"foo": []common.KeyScoreMember{
+			{"foo", 50.1, "alpha"},
+			{"foo", 45.4, "gamma"},
+			{"foo", 35.9, "nu"},
+			{"foo", 34.8, "omicron"},
+			{"foo", 33.7, "sigma"},
+			{"foo", 21.5, "kappa"},
+			{"foo", 11.3, "delta"},
+		},
+		"bar": []common.KeyScoreMember{
+			{"bar", 33.3, "psi"},
+		},
+	} {
+		if got := m[key]; !reflect.DeepEqual(expected, got) {
+			t.Errorf("key %q: expected \n\t%v, got \n\t%v", key, expected, got)
+			continue
+		}
+	}
+
+	// Multiple keys, middle of the list, limited elements.
+	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: 66.6, Member: "rho"}, 1)
+	m = map[string][]common.KeyScoreMember{}
+	for e := range ch {
+		if e.Error != nil {
+			t.Errorf("during Select: key %q: %s", e.Key, e.Error)
+		}
+		m[e.Key] = e.KeyScoreMembers
+	}
+	for key, expected := range map[string][]common.KeyScoreMember{
+		"foo": []common.KeyScoreMember{
+			{"foo", 50.1, "alpha"},
+		},
+		"bar": []common.KeyScoreMember{
+			{"bar", 33.3, "psi"},
+		},
+	} {
+		if got := m[key]; !reflect.DeepEqual(expected, got) {
+			t.Errorf("key %q: expected \n\t%v, got \n\t%v", key, expected, got)
+			continue
+		}
+	}
+}
+
+func TestCursorRetries(t *testing.T) {
+	addresses := os.Getenv("TEST_REDIS_ADDRESSES")
+	if addresses == "" {
+		t.Logf("To run this test, set the TEST_REDIS_ADDRESSES environment variable")
+		return
+	}
+
+	// Build a new cluster.
+	c := integrationCluster(t, addresses, 1000)
+
+	// Insert many elements with the same score.
+	if err := c.Insert([]common.KeyScoreMember{
+		{"foo", 2.00, "pre"},
+		{"foo", 1.23, "mmm"}, // same score = reverse lex
+		{"foo", 1.23, "lll"},
+		{"foo", 1.23, "kkk"},
+		{"foo", 1.23, "jjj"},
+		{"foo", 1.23, "iii"},
+		{"foo", 1.23, "hhh"},
+		{"foo", 1.23, "ggg"},
+		{"foo", 1.23, "fff"},
+		{"foo", 1.23, "eee"},
+		{"foo", 1.23, "ddd"},
+		{"foo", 1.23, "ccc"},
+		{"foo", 1.23, "bbb"},
+		{"foo", 1.23, "aaa"},
+		{"foo", 0.01, "post"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make a select from a cursor position of one of the last elements, with
+	// a low limit. A hard-coded, low maxRetries means this will fail. Note
+	// that this is testing the specific implementation: not a great unit
+	// test.
+	element := <-c.SelectCursor([]string{"foo"}, common.Cursor{Score: 1.23, Member: "bbb"}, 2)
+	if element.Error == nil {
+		t.Error("expected error, got none")
+	} else {
+		t.Logf("got expected error (%s)", element.Error)
+	}
+
+	// If we choose a higher limit, it should work.
+	element = <-c.SelectCursor([]string{"foo"}, common.Cursor{Score: 1.23, Member: "bbb"}, 5)
+	if element.Error != nil {
+		t.Errorf("got unexpected error: %s", element.Error)
+	} else {
+		t.Logf("OK: %v", element.KeyScoreMembers)
+	}
+
+	// If we choose a slightly earlier cursor, it should also work.
+	element = <-c.SelectCursor([]string{"foo"}, common.Cursor{Score: 1.23, Member: "hhh"}, 2)
+	if element.Error != nil {
+		t.Errorf("got unexpected error: %s", element.Error)
+	} else {
+		t.Logf("OK: %v", element.KeyScoreMembers)
 	}
 }
 
