@@ -353,8 +353,8 @@ loop:
 		returned         = 0
 	)
 	defer func() {
+		duration := time.Since(began)
 		go func() {
-			duration := time.Since(began)
 			s.Farm.instrumentation.SelectDuration(duration)
 			s.Farm.instrumentation.SelectFirstResponseDuration(firstResponseDuration)
 			s.Farm.instrumentation.SelectBlockingDuration(blockingDuration)
