@@ -294,7 +294,7 @@ job with a relatively small surface area. From the bottom up...
 
 ## The big picture
 
-![Overview](http://i.imgur.com/C2w2Jys.png)
+![Overview](http://i.imgur.com/SEeKquW.png)
 
 (Clusters need not have the same number of Redis instances.)
 
