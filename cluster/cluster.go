@@ -183,22 +183,22 @@ func (c *cluster) Insert(keyScoreMembers []common.KeyScoreMember) error {
 // using the offset and limit for each. It pushes results to the returned chan
 // as they become available.
 func (c *cluster) SelectOffset(keys []string, offset, limit int) <-chan Element {
-	return c.selectCommon(keys, func(conn redis.Conn) (map[string][]common.KeyScoreMember, error) {
-		return pipelineRange(conn, keys, offset, limit)
+	return c.selectCommon(keys, func(conn redis.Conn, myKeys []string) (map[string][]common.KeyScoreMember, error) {
+		return pipelineRange(conn, myKeys, offset, limit)
 	})
 }
 
 // SelectCursor uses ZREVRANGEBYSCORE to do a cursor-based select, similar to
 // SelectOffset.
 func (c *cluster) SelectCursor(keys []string, cursor common.Cursor, limit int) <-chan Element {
-	return c.selectCommon(keys, func(conn redis.Conn) (map[string][]common.KeyScoreMember, error) {
-		return pipelineRangeByScore(conn, keys, cursor, limit)
+	return c.selectCommon(keys, func(conn redis.Conn, myKeys []string) (map[string][]common.KeyScoreMember, error) {
+		return pipelineRangeByScore(conn, myKeys, cursor, limit)
 	})
 }
 
 func (c *cluster) selectCommon(
 	keys []string,
-	fn func(redis.Conn) (map[string][]common.KeyScoreMember, error),
+	fn func(redis.Conn, []string) (map[string][]common.KeyScoreMember, error),
 ) <-chan Element {
 	out := make(chan Element)
 	go func() {
@@ -224,7 +224,7 @@ func (c *cluster) selectCommon(
 				var elements []Element
 				var result map[string][]common.KeyScoreMember
 				if err := c.pool.WithIndex(index, func(conn redis.Conn) (err error) {
-					result, err = fn(conn)
+					result, err = fn(conn, keys)
 					return
 				}); err != nil {
 					elements = errorElements(keys, err)
