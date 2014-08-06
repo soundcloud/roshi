@@ -527,7 +527,7 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, cursor common.Cursor, 
 	var (
 		keysToSelect = keys  // start with all
 		selectLimit  = limit // double every time
-		maxAttempts  = 3     // up to this many times
+		maxAttempts  = 3     // up to this many times (TODO could be paramaterized)
 		results      = map[string][]common.KeyScoreMember{}
 	)
 	for attempt := 0; len(keysToSelect) > 0 && attempt < maxAttempts; attempt++ {
