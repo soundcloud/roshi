@@ -266,9 +266,11 @@ func (s sendVarReadFirstLinger) read(keys []string, fn func(cluster.Cluster, []s
 		maySendAll      = s.permitter.canHas(int64(len(keys)))
 	)
 	if maySendAll {
+		go s.Farm.instrumentation.SelectSendAllPermitGranted()
 		clustersUsed = s.Farm.clusters
 		clustersNotUsed = []cluster.Cluster{}
 	} else {
+		go s.Farm.instrumentation.SelectSendAllPermitRejected()
 		i := rand.Intn(len(s.Farm.clusters))
 		clustersUsed = s.Farm.clusters[i : i+1]
 		clustersNotUsed = make([]cluster.Cluster, 0, len(s.Farm.clusters)-1)

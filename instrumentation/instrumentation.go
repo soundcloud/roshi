@@ -34,6 +34,8 @@ type SelectInstrumentation interface {
 	SelectBlockingDuration(time.Duration)      // time spent waiting for everything
 	SelectOverheadDuration(time.Duration)      // time spent not waiting
 	SelectDuration(time.Duration)              // overall time performing this read (blocking + overhead)
+	SelectSendAllPermitGranted()               // called when the permitter allows SendVarReadFirstLinger to send to all clusters
+	SelectSendAllPermitRejected()              // called when the permitter doesn't allow SendVarReadFirstLinger to send to all clusters
 	SelectSendAllPromotion()                   // called when the read strategy promotes a "SendOne" to a "SendAll" because of missing results
 	SelectRetrieved(int)                       // total number of KeyScoreMembers retrieved from the backing store
 	SelectReturned(int)                        // total number of KeyScoreMembers returned to the caller

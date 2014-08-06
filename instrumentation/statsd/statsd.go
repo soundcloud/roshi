@@ -80,6 +80,14 @@ func (i statsdInstrumentation) SelectDuration(d time.Duration) {
 	i.statter.Timing(i.sampleRate, i.prefix+"select.duration", d)
 }
 
+func (i statsdInstrumentation) SelectSendAllPermitGranted() {
+	i.statter.Counter(i.sampleRate, i.prefix+"select.send_all_permit_granted.count", 1)
+}
+
+func (i statsdInstrumentation) SelectSendAllPermitRejected() {
+	i.statter.Counter(i.sampleRate, i.prefix+"select.send_all_permit_rejected.count", 1)
+}
+
 func (i statsdInstrumentation) SelectSendAllPromotion() {
 	i.statter.Counter(i.sampleRate, i.prefix+"select.send_all_promotion.count", 1)
 }

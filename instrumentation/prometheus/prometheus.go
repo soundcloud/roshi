@@ -15,34 +15,36 @@ var _ instrumentation.Instrumentation = PrometheusInstrumentation{}
 
 // PrometheusInstrumentation holds metrics for all instrumented methods.
 type PrometheusInstrumentation struct {
-	insertCallCount             prometheus.Counter
-	insertRecordCount           prometheus.Counter
-	insertCallDuration          prometheus.Summary
-	insertRecordDuration        prometheus.Summary
-	insertQuorumFailureCount    prometheus.Counter
-	selectCallCount             prometheus.Counter
-	selectKeysCount             prometheus.Counter
-	selectSendToCount           prometheus.Counter
-	selectFirstResponseDuration prometheus.Summary
-	selectPartialErrorCount     prometheus.Counter
-	selectBlockingDuration      prometheus.Summary
-	selectOverheadDuration      prometheus.Summary
-	selectDuration              prometheus.Summary
-	selectSendAllPromotionCount prometheus.Counter
-	selectRetrievedCount        prometheus.Counter
-	selectReturnedCount         prometheus.Counter
-	selectRepairNeededCount     prometheus.Counter
-	deleteCallCount             prometheus.Counter
-	deleteRecordCount           prometheus.Counter
-	deleteCallDuration          prometheus.Summary
-	deleteRecordDuration        prometheus.Summary
-	deleteQuorumFailureCount    prometheus.Counter
-	repairCallCount             prometheus.Counter
-	repairRequestCount          prometheus.Counter
-	repairDiscardedCount        prometheus.Counter
-	repairWriteSuccessCount     prometheus.Counter
-	repairWriteFailureCount     prometheus.Counter
-	walkKeysCount               prometheus.Counter
+	insertCallCount                  prometheus.Counter
+	insertRecordCount                prometheus.Counter
+	insertCallDuration               prometheus.Summary
+	insertRecordDuration             prometheus.Summary
+	insertQuorumFailureCount         prometheus.Counter
+	selectCallCount                  prometheus.Counter
+	selectKeysCount                  prometheus.Counter
+	selectSendToCount                prometheus.Counter
+	selectFirstResponseDuration      prometheus.Summary
+	selectPartialErrorCount          prometheus.Counter
+	selectBlockingDuration           prometheus.Summary
+	selectOverheadDuration           prometheus.Summary
+	selectDuration                   prometheus.Summary
+	selectSendAllPermitGrantedCount  prometheus.Counter
+	selectSendAllPermitRejectedCount prometheus.Counter
+	selectSendAllPromotionCount      prometheus.Counter
+	selectRetrievedCount             prometheus.Counter
+	selectReturnedCount              prometheus.Counter
+	selectRepairNeededCount          prometheus.Counter
+	deleteCallCount                  prometheus.Counter
+	deleteRecordCount                prometheus.Counter
+	deleteCallDuration               prometheus.Summary
+	deleteRecordDuration             prometheus.Summary
+	deleteQuorumFailureCount         prometheus.Counter
+	repairCallCount                  prometheus.Counter
+	repairRequestCount               prometheus.Counter
+	repairDiscardedCount             prometheus.Counter
+	repairWriteSuccessCount          prometheus.Counter
+	repairWriteFailureCount          prometheus.Counter
+	walkKeysCount                    prometheus.Counter
 }
 
 // New returns a new Instrumentation that prints metrics to the passed
@@ -120,6 +122,16 @@ func New(prefix string, maxSummaryAge time.Duration) PrometheusInstrumentation {
 			Name:      "select_duration_nanoseconds",
 			Help:      "Overall select duration.",
 			MaxAge:    maxSummaryAge,
+		}),
+		selectSendAllPermitGrantedCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "select_send_all_permit_granted_count",
+			Help:      "How many select requests were granted initial permission to send-all, in appropriate read strategies.",
+		}),
+		selectSendAllPermitRejectedCount: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: prefix,
+			Name:      "select_send_all_permit_rejected_count",
+			Help:      "How many select requests were denied initial permission to send-all, in appropriate read strategies.",
 		}),
 		selectSendAllPromotionCount: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: prefix,
@@ -213,6 +225,8 @@ func New(prefix string, maxSummaryAge time.Duration) PrometheusInstrumentation {
 	prometheus.MustRegister(i.selectBlockingDuration)
 	prometheus.MustRegister(i.selectOverheadDuration)
 	prometheus.MustRegister(i.selectDuration)
+	prometheus.MustRegister(i.selectSendAllPermitGrantedCount)
+	prometheus.MustRegister(i.selectSendAllPermitRejectedCount)
 	prometheus.MustRegister(i.selectSendAllPromotionCount)
 	prometheus.MustRegister(i.selectRetrievedCount)
 	prometheus.MustRegister(i.selectReturnedCount)
@@ -300,6 +314,16 @@ func (i PrometheusInstrumentation) SelectOverheadDuration(d time.Duration) {
 // SelectDuration satisfies the Instrumentation interface.
 func (i PrometheusInstrumentation) SelectDuration(d time.Duration) {
 	i.selectDuration.Observe(float64(d.Nanoseconds()))
+}
+
+// SelectSendAllPermitGranted satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectSendAllPermitGranted() {
+	i.selectSendAllPermitGrantedCount.Inc()
+}
+
+// SelectSendAllPermitRejected satisfies the Instrumentation interface.
+func (i PrometheusInstrumentation) SelectSendAllPermitRejected() {
+	i.selectSendAllPermitRejectedCount.Inc()
 }
 
 // SelectSendAllPromotion satisfies the Instrumentation interface.

@@ -8,6 +8,9 @@ type MultiInstrumentation struct {
 	instrs []Instrumentation
 }
 
+// Satisfaction guaranteed.
+var _ Instrumentation = MultiInstrumentation{}
+
 // NewMultiInstrumentation creates a new MultiInstrumentation that will demux
 // all calls to the provided Instrumentation targets.
 func NewMultiInstrumentation(instrs ...Instrumentation) Instrumentation {
@@ -16,21 +19,21 @@ func NewMultiInstrumentation(instrs ...Instrumentation) Instrumentation {
 	}
 }
 
-// InsertCall satisfies the Instrumentation interface but does no work.
+// InsertCall satisfies the Instrumentation interface.
 func (i MultiInstrumentation) InsertCall() {
 	for _, instr := range i.instrs {
 		instr.InsertCall()
 	}
 }
 
-// InsertRecordCount satisfies the Instrumentation interface but does no work.
+// InsertRecordCount satisfies the Instrumentation interface.
 func (i MultiInstrumentation) InsertRecordCount(n int) {
 	for _, instr := range i.instrs {
 		instr.InsertRecordCount(n)
 	}
 }
 
-// InsertCallDuration satisfies the Instrumentation interface but does no work.
+// InsertCallDuration satisfies the Instrumentation interface.
 func (i MultiInstrumentation) InsertCallDuration(d time.Duration) {
 	for _, instr := range i.instrs {
 		instr.InsertCallDuration(d)
@@ -45,28 +48,28 @@ func (i MultiInstrumentation) InsertRecordDuration(d time.Duration) {
 	}
 }
 
-// InsertQuorumFailure satisfies the Instrumentation interface but does no work.
+// InsertQuorumFailure satisfies the Instrumentation interface.
 func (i MultiInstrumentation) InsertQuorumFailure() {
 	for _, instr := range i.instrs {
 		instr.InsertQuorumFailure()
 	}
 }
 
-// SelectCall satisfies the Instrumentation interface but does no work.
+// SelectCall satisfies the Instrumentation interface.
 func (i MultiInstrumentation) SelectCall() {
 	for _, instr := range i.instrs {
 		instr.SelectCall()
 	}
 }
 
-// SelectKeys satisfies the Instrumentation interface but does no work.
+// SelectKeys satisfies the Instrumentation interface.
 func (i MultiInstrumentation) SelectKeys(n int) {
 	for _, instr := range i.instrs {
 		instr.SelectKeys(n)
 	}
 }
 
-// SelectSendTo satisfies the Instrumentation interface but does no work.
+// SelectSendTo satisfies the Instrumentation interface.
 func (i MultiInstrumentation) SelectSendTo(n int) {
 	for _, instr := range i.instrs {
 		instr.SelectSendTo(n)
@@ -105,56 +108,70 @@ func (i MultiInstrumentation) SelectOverheadDuration(d time.Duration) {
 	}
 }
 
-// SelectDuration satisfies the Instrumentation interface but does no work.
+// SelectDuration satisfies the Instrumentation interface.
 func (i MultiInstrumentation) SelectDuration(d time.Duration) {
 	for _, instr := range i.instrs {
 		instr.SelectDuration(d)
 	}
 }
 
-// SelectSendAllPromotion satisfies the Instrumentation interface but does no work.
+// SelectSendAllPermitGranted satisfies the Instrumentation interface.
+func (i MultiInstrumentation) SelectSendAllPermitGranted() {
+	for _, instr := range i.instrs {
+		instr.SelectSendAllPermitGranted()
+	}
+}
+
+// SelectSendAllPermitRejected satisfies the Instrumentation interface.
+func (i MultiInstrumentation) SelectSendAllPermitRejected() {
+	for _, instr := range i.instrs {
+		instr.SelectSendAllPermitRejected()
+	}
+}
+
+// SelectSendAllPromotion satisfies the Instrumentation interface.
 func (i MultiInstrumentation) SelectSendAllPromotion() {
 	for _, instr := range i.instrs {
 		instr.SelectSendAllPromotion()
 	}
 }
 
-// SelectRetrieved satisfies the Instrumentation interface but does no work.
+// SelectRetrieved satisfies the Instrumentation interface.
 func (i MultiInstrumentation) SelectRetrieved(n int) {
 	for _, instr := range i.instrs {
 		instr.SelectRetrieved(n)
 	}
 }
 
-// SelectReturned satisfies the Instrumentation interface but does no work.
+// SelectReturned satisfies the Instrumentation interface.
 func (i MultiInstrumentation) SelectReturned(n int) {
 	for _, instr := range i.instrs {
 		instr.SelectReturned(n)
 	}
 }
 
-// SelectRepairNeeded satisfies the Instrumentation interface but does no work.
+// SelectRepairNeeded satisfies the Instrumentation interface.
 func (i MultiInstrumentation) SelectRepairNeeded(n int) {
 	for _, instr := range i.instrs {
 		instr.SelectRepairNeeded(n)
 	}
 }
 
-// DeleteCall satisfies the Instrumentation interface but does no work.
+// DeleteCall satisfies the Instrumentation interface.
 func (i MultiInstrumentation) DeleteCall() {
 	for _, instr := range i.instrs {
 		instr.DeleteCall()
 	}
 }
 
-// DeleteRecordCount satisfies the Instrumentation interface but does no work.
+// DeleteRecordCount satisfies the Instrumentation interface.
 func (i MultiInstrumentation) DeleteRecordCount(n int) {
 	for _, instr := range i.instrs {
 		instr.DeleteRecordCount(n)
 	}
 }
 
-// DeleteCallDuration satisfies the Instrumentation interface but does no work.
+// DeleteCallDuration satisfies the Instrumentation interface.
 func (i MultiInstrumentation) DeleteCallDuration(d time.Duration) {
 	for _, instr := range i.instrs {
 		instr.DeleteCallDuration(d)
@@ -169,49 +186,49 @@ func (i MultiInstrumentation) DeleteRecordDuration(d time.Duration) {
 	}
 }
 
-// DeleteQuorumFailure satisfies the Instrumentation interface but does no work.
+// DeleteQuorumFailure satisfies the Instrumentation interface.
 func (i MultiInstrumentation) DeleteQuorumFailure() {
 	for _, instr := range i.instrs {
 		instr.DeleteQuorumFailure()
 	}
 }
 
-// RepairCall satisfies the Instrumentation interface but does no work.
+// RepairCall satisfies the Instrumentation interface.
 func (i MultiInstrumentation) RepairCall() {
 	for _, instr := range i.instrs {
 		instr.RepairCall()
 	}
 }
 
-// RepairRequest satisfies the Instrumentation interface but does no work.
+// RepairRequest satisfies the Instrumentation interface.
 func (i MultiInstrumentation) RepairRequest(n int) {
 	for _, instr := range i.instrs {
 		instr.RepairRequest(n)
 	}
 }
 
-// RepairDiscarded satisfies the Instrumentation interface but does no work.
+// RepairDiscarded satisfies the Instrumentation interface.
 func (i MultiInstrumentation) RepairDiscarded(n int) {
 	for _, instr := range i.instrs {
 		instr.RepairDiscarded(n)
 	}
 }
 
-// RepairWriteSuccess satisfies the Instrumentation interface but does no work.
+// RepairWriteSuccess satisfies the Instrumentation interface.
 func (i MultiInstrumentation) RepairWriteSuccess(n int) {
 	for _, instr := range i.instrs {
 		instr.RepairWriteSuccess(n)
 	}
 }
 
-// RepairWriteFailure satisfies the Instrumentation interface but does no work.
+// RepairWriteFailure satisfies the Instrumentation interface.
 func (i MultiInstrumentation) RepairWriteFailure(n int) {
 	for _, instr := range i.instrs {
 		instr.RepairWriteFailure(n)
 	}
 }
 
-// WalkKeys satisfies the Instrumentation interface but does no work.
+// WalkKeys satisfies the Instrumentation interface.
 func (i MultiInstrumentation) WalkKeys(n int) {
 	for _, instr := range i.instrs {
 		instr.WalkKeys(n)

@@ -73,6 +73,14 @@ func (i plaintextInstrumentation) SelectDuration(d time.Duration) {
 	fmt.Fprintf(i, "select.duration_ms %d", d.Nanoseconds()/1e6)
 }
 
+func (i plaintextInstrumentation) SelectSendAllPermitGranted() {
+	fmt.Fprintf(i, "select.send_all_permit_granted.count 1")
+}
+
+func (i plaintextInstrumentation) SelectSendAllPermitRejected() {
+	fmt.Fprintf(i, "select.send_all_permit_rejected.count 1")
+}
+
 func (i plaintextInstrumentation) SelectSendAllPromotion() {
 	fmt.Fprintf(i, "select.send_all_promotion.count 1")
 }
