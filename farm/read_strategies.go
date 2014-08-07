@@ -34,9 +34,9 @@ func (s sendOneReadOne) SelectOffset(keys []string, offset, limit int) (map[stri
 }
 
 // SelectCursor implements farm.Selecter.
-func (s sendOneReadOne) SelectCursor(keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
+func (s sendOneReadOne) SelectCursor(keys []string, cursor, stopcursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
 	return s.read(len(keys), func(c cluster.Cluster) <-chan cluster.Element {
-		return c.SelectCursor(keys, cursor, limit)
+		return c.SelectCursor(keys, cursor, stopcursor, limit)
 	})
 }
 
@@ -99,9 +99,9 @@ func (s sendAllReadAll) SelectOffset(keys []string, offset, limit int) (map[stri
 }
 
 // SelectCursor implements farm.Selecter.
-func (s sendAllReadAll) SelectCursor(keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
+func (s sendAllReadAll) SelectCursor(keys []string, cursor, stopcursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
 	return s.read(len(keys), func(c cluster.Cluster) <-chan cluster.Element {
-		return c.SelectCursor(keys, cursor, limit)
+		return c.SelectCursor(keys, cursor, stopcursor, limit)
 	}, limit)
 }
 
@@ -233,9 +233,9 @@ func (s sendVarReadFirstLinger) SelectOffset(keys []string, offset, limit int) (
 }
 
 // SelectCursor implements farm.Selecter.
-func (s sendVarReadFirstLinger) SelectCursor(keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
+func (s sendVarReadFirstLinger) SelectCursor(keys []string, cursor, stopcursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
 	return s.read(keys, func(c cluster.Cluster, keys []string) <-chan cluster.Element {
-		return c.SelectCursor(keys, cursor, limit)
+		return c.SelectCursor(keys, cursor, stopcursor, limit)
 	}, limit)
 }
 
