@@ -350,7 +350,7 @@ func (f *mockFarm) SelectOffset(keys []string, offset, limit int) (map[string][]
 	return m, nil
 }
 
-func (f *mockFarm) SelectCursor(keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
+func (f *mockFarm) SelectCursor(keys []string, cursor, stopcursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
 	return map[string][]common.KeyScoreMember{}, fmt.Errorf("not yet implemented")
 }
 

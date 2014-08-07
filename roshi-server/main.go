@@ -217,25 +217,35 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 		}
 
 		var (
-			offset, offsetGiven    = parseInt(r.Form, "offset", 0)
-			cursorStr, cursorGiven = parseStr(r.Form, "cursor", "")
-			limit, _               = parseInt(r.Form, "limit", 10)
-			coalesce, _            = parseBool(r.Form, "coalesce", false)
+			offset, offsetGiven            = parseInt(r.Form, "offset", 0)
+			cursorStr, cursorGiven         = parseStr(r.Form, "cursor", "")
+			stopcursorStr, stopcursorGiven = parseStr(r.Form, "stopcursor", "")
+			limit, _                       = parseInt(r.Form, "limit", 10)
+			coalesce, _                    = parseBool(r.Form, "coalesce", false)
 		)
 
 		switch {
 		case !offsetGiven && cursorGiven:
 			// SelectCursor. The presence of `coalesce` has no impact.
-			var cursor common.Cursor
+			var cursor, stopcursor common.Cursor
 			if err := cursor.Parse(cursorStr); err != nil {
 				respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, err)
 				return
 			}
-			results, err := selecter.SelectCursor(keyStrings, cursor, limit)
+
+			if stopcursorGiven {
+				if err := stopcursor.Parse(stopcursorStr); err != nil {
+					respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, err)
+					return
+				}
+			}
+
+			results, err := selecter.SelectCursor(keyStrings, cursor, stopcursor, limit)
 			if err != nil {
 				respondError(w, r.Method, r.URL.String(), http.StatusInternalServerError, err)
 				return
 			}
+
 			cursorResults := map[string][]keyScoreMemberCursor{}
 			for key, keyScoreMembers := range results {
 				keyScoreMemberCursors := make([]keyScoreMemberCursor, len(keyScoreMembers))
@@ -247,10 +257,12 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 				}
 				cursorResults[key] = keyScoreMemberCursors
 			}
+
 			if coalesce {
 				respondSelected(w, flattenCursor(cursorResults, limit), time.Since(began))
 				return
 			}
+
 			respondSelected(w, cursorResults, time.Since(began))
 			return
 
@@ -260,19 +272,23 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 				selectOffset = offset
 				selectLimit  = limit
 			)
+
 			if coalesce {
 				selectOffset = 0
 				selectLimit = offset + limit
 			}
+
 			results, err := selecter.SelectOffset(keyStrings, selectOffset, selectLimit)
 			if err != nil {
 				respondError(w, r.Method, r.URL.String(), http.StatusInternalServerError, err)
 				return
 			}
+
 			if coalesce {
 				respondSelected(w, flattenOffset(results, offset, limit), time.Since(began))
 				return
 			}
+
 			respondSelected(w, results, time.Since(began))
 			return
 
