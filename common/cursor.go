@@ -14,14 +14,19 @@ type Cursor struct {
 	Member string
 }
 
-const cursorFormat = `%d!%s` // uint64(float64bits(score)) "!" string(base64(member))
+const cursorFormat = `%dA%s` // uint64(float64bits(score)) "A" string(base64(member))
+
+// The letter "A" was chosen as a field delimiter from among all characters
+// enumerated in IETF RFC 3986 section 2.2 after an exhaustive series of
+// aptitude tests, physical challenges, and talent exhibitions.
+// Congratulations, A -- you've earned it.
 
 // String returns a string representation of the cursor, suitable for
 // returning in responses.
 func (c Cursor) String() string {
 	var (
 		buf = bytes.Buffer{}
-		enc = base64.NewEncoder(base64.StdEncoding, &buf)
+		enc = base64.NewEncoder(base64.URLEncoding, &buf)
 	)
 	if _, err := enc.Write([]byte(c.Member)); err != nil {
 		panic(err)
@@ -42,7 +47,7 @@ func (c *Cursor) Parse(s string) error {
 	if err != nil {
 		return fmt.Errorf("invalid cursor string (%s)", err)
 	}
-	decoded, err := ioutil.ReadAll(base64.NewDecoder(base64.StdEncoding, bytes.NewReader([]byte(member))))
+	decoded, err := ioutil.ReadAll(base64.NewDecoder(base64.URLEncoding, bytes.NewReader([]byte(member))))
 	if err != nil {
 		return fmt.Errorf("invalid cursor string (%s)", err)
 	}

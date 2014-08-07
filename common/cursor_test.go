@@ -1,8 +1,10 @@
 package common
 
 import (
+	"math"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestCursorSerialization(t *testing.T) {
@@ -25,5 +27,44 @@ func TestCursorSerialization(t *testing.T) {
 			continue
 		}
 		t.Logf("%#+v: %q", cursor, s)
+	}
+}
+
+func TestCursorSafety(t *testing.T) {
+	var (
+		scores = []float64{
+			0.0,
+			1.23,
+			float64(time.Now().UnixNano()) / 1e9,
+			math.MaxFloat64,
+			math.SmallestNonzeroFloat64,
+		}
+		members = [][]byte{
+			[]byte{0},
+			[]byte{0, 0, 0},
+			[]byte{1, 2, 3},
+			[]byte{12, 34, 56, 78, 90},
+			[]byte{255},
+			[]byte{255, 0, 0, 0},
+			[]byte{255, 0, 128, 0, 64, 0, 32, 0, 16, 0, 8, 0, 4, 0, 2, 0},
+		}
+	)
+
+	for _, score := range scores {
+		for _, member := range members {
+			in := Cursor{Score: score, Member: string(member)}
+			serialized := in.String()
+
+			var out Cursor
+			if err := out.Parse(serialized); err != nil {
+				t.Errorf("score %f member %v: when parsing: %s", score, member, err)
+				continue
+			}
+
+			if !reflect.DeepEqual(in, out) {
+				t.Errorf("score %f member %v: after parsing, want %+v, have %+v", score, member, in, out)
+				continue
+			}
+		}
 	}
 }
