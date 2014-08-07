@@ -373,7 +373,7 @@ func TestSelectCursor(t *testing.T) {
 	}
 
 	// Middle of the list, a real element cursor.
-	ch := c.SelectCursor([]string{"foo"}, common.Cursor{Score: 45.4, Member: "gamma"}, 100)
+	ch := c.SelectCursor([]string{"foo"}, common.Cursor{Score: 45.4, Member: "gamma"}, common.Cursor{}, 100)
 	expected := []common.KeyScoreMember{
 		{"foo", 35.9, "nu"},
 		{"foo", 34.8, "omicron"},
@@ -393,7 +393,7 @@ func TestSelectCursor(t *testing.T) {
 	}
 
 	// Top of the list.
-	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: math.MaxFloat64, Member: ""}, 100)
+	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: math.MaxFloat64}, common.Cursor{}, 100)
 	expected = []common.KeyScoreMember{
 		{"foo", 99.2, "beta"},
 		{"foo", 76.6, "iota"},
@@ -417,7 +417,7 @@ func TestSelectCursor(t *testing.T) {
 	}
 
 	// Restricted limit.
-	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: 50.1, Member: "alpha"}, 3)
+	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: 50.1, Member: "alpha"}, common.Cursor{}, 3)
 	expected = []common.KeyScoreMember{
 		{"foo", 45.4, "gamma"},
 		{"foo", 35.9, "nu"},
@@ -435,7 +435,7 @@ func TestSelectCursor(t *testing.T) {
 	}
 
 	// Multiple keys, top of the list, all elements.
-	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: math.MaxFloat64, Member: ""}, 100)
+	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: math.MaxFloat64, Member: ""}, common.Cursor{}, 100)
 	m := map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
@@ -468,7 +468,7 @@ func TestSelectCursor(t *testing.T) {
 	}
 
 	// Multiple keys, middle of the list, all elements.
-	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: 66.6, Member: "rho"}, 100)
+	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: 66.6, Member: "rho"}, common.Cursor{}, 100)
 	m = map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
@@ -497,7 +497,7 @@ func TestSelectCursor(t *testing.T) {
 	}
 
 	// Multiple keys, middle of the list, limited elements.
-	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: 66.6, Member: "rho"}, 1)
+	ch = c.SelectCursor([]string{"bar", "foo"}, common.Cursor{Score: 66.6, Member: "rho"}, common.Cursor{}, 1)
 	m = map[string][]common.KeyScoreMember{}
 	for e := range ch {
 		if e.Error != nil {
@@ -517,6 +517,41 @@ func TestSelectCursor(t *testing.T) {
 			t.Errorf("key %q: expected \n\t%v, got \n\t%v", key, expected, got)
 			continue
 		}
+	}
+
+	// Top of the list, using the stopcursor.
+	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: math.MaxFloat64}, common.Cursor{Score: 45.4, Member: "gamma"}, 100)
+	expected = []common.KeyScoreMember{
+		{"foo", 99.2, "beta"},
+		{"foo", 76.6, "iota"},
+		{"foo", 50.1, "alpha"},
+	}
+	e = <-ch
+	if e.Error != nil {
+		t.Fatalf("key %q: %s", e.Key, e.Error)
+	}
+	if got := e.KeyScoreMembers; !reflect.DeepEqual(expected, got) {
+		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
+	}
+	if _, ok := <-ch; ok {
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
+	}
+
+	// Middle of the list, using the stopcursor.
+	ch = c.SelectCursor([]string{"foo"}, common.Cursor{Score: 35.9, Member: "nu"}, common.Cursor{Score: 21.5, Member: "kappa"}, 100)
+	expected = []common.KeyScoreMember{
+		{"foo", 34.8, "omicron"},
+		{"foo", 33.7, "sigma"},
+	}
+	e = <-ch
+	if e.Error != nil {
+		t.Fatalf("key %q: %s", e.Key, e.Error)
+	}
+	if got := e.KeyScoreMembers; !reflect.DeepEqual(expected, got) {
+		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
+	}
+	if _, ok := <-ch; ok {
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
 	}
 }
 
@@ -555,7 +590,7 @@ func TestCursorRetries(t *testing.T) {
 	// a low limit. A hard-coded, low maxRetries means this will fail. Note
 	// that this is testing the specific implementation: not a great unit
 	// test.
-	element := <-c.SelectCursor([]string{"foo"}, common.Cursor{Score: 1.23, Member: "bbb"}, 2)
+	element := <-c.SelectCursor([]string{"foo"}, common.Cursor{Score: 1.23, Member: "bbb"}, common.Cursor{}, 2)
 	if element.Error == nil {
 		t.Error("expected error, got none")
 	} else {
@@ -563,7 +598,7 @@ func TestCursorRetries(t *testing.T) {
 	}
 
 	// If we choose a higher limit, it should work.
-	element = <-c.SelectCursor([]string{"foo"}, common.Cursor{Score: 1.23, Member: "bbb"}, 5)
+	element = <-c.SelectCursor([]string{"foo"}, common.Cursor{Score: 1.23, Member: "bbb"}, common.Cursor{}, 5)
 	if element.Error != nil {
 		t.Errorf("got unexpected error: %s", element.Error)
 	} else {
@@ -571,7 +606,7 @@ func TestCursorRetries(t *testing.T) {
 	}
 
 	// If we choose a slightly earlier cursor, it should also work.
-	element = <-c.SelectCursor([]string{"foo"}, common.Cursor{Score: 1.23, Member: "hhh"}, 2)
+	element = <-c.SelectCursor([]string{"foo"}, common.Cursor{Score: 1.23, Member: "hhh"}, common.Cursor{}, 2)
 	if element.Error != nil {
 		t.Errorf("got unexpected error: %s", element.Error)
 	} else {

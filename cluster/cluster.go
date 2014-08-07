@@ -43,7 +43,7 @@ type Inserter interface {
 // Selecter defines the methods to retrieve elements from a sorted set.
 type Selecter interface {
 	SelectOffset(keys []string, offset, limit int) <-chan Element
-	SelectCursor(keys []string, cursor common.Cursor, limit int) <-chan Element
+	SelectCursor(keys []string, cursor, stopcursor common.Cursor, limit int) <-chan Element
 }
 
 // Deleter defines the method to delete elements from a sorted set. A key-
@@ -190,9 +190,9 @@ func (c *cluster) SelectOffset(keys []string, offset, limit int) <-chan Element 
 
 // SelectCursor uses ZREVRANGEBYSCORE to do a cursor-based select, similar to
 // SelectOffset.
-func (c *cluster) SelectCursor(keys []string, cursor common.Cursor, limit int) <-chan Element {
+func (c *cluster) SelectCursor(keys []string, cursor, stopcursor common.Cursor, limit int) <-chan Element {
 	return c.selectCommon(keys, func(conn redis.Conn, myKeys []string) (map[string][]common.KeyScoreMember, error) {
-		return pipelineRangeByScore(conn, myKeys, cursor, limit)
+		return pipelineRangeByScore(conn, myKeys, cursor, stopcursor, limit)
 	})
 }
 
@@ -500,17 +500,33 @@ func pipelineRange(conn redis.Conn, keys []string, offset, limit int) (map[strin
 	return m, nil
 }
 
-func pipelineRangeByScore(conn redis.Conn, keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
+func pipelineRangeByScore(conn redis.Conn, keys []string, cursor, stopcursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
 	if limit < 0 {
 		// TODO maybe change that
 		return map[string][]common.KeyScoreMember{}, fmt.Errorf("negative limit is invalid for cursor-based select")
 	}
 
-	pastCursor := func(score float64, member []byte) bool {
+	// pastCursor returns true when the score+member are "past" the cursor
+	// (smaller score, larger lexicographically) and can therefore be included
+	// in the resultset.
+	pastCursor := func(score float64, member string) bool {
 		if score < cursor.Score {
 			return true
 		}
 		if score == cursor.Score && bytes.Compare([]byte(member), []byte(cursor.Member)) < 0 {
+			return true
+		}
+		return false
+	}
+
+	// beforeStop returns true as long as the score+member are "before" the
+	// stopcursor (larger score, smaller lexicographically) and can therefore
+	// be included in the resultset.
+	beforeStop := func(score float64, member string) bool {
+		if score > stopcursor.Score {
+			return true
+		}
+		if score == stopcursor.Score && bytes.Compare([]byte(member), []byte(stopcursor.Member)) > 0 {
 			return true
 		}
 		return false
@@ -560,6 +576,7 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, cursor common.Cursor, 
 			var (
 				collected = 0
 				validated = make([]common.KeyScoreMember, 0, len(values))
+				hitStop   = false
 			)
 
 			for len(values) > 0 {
@@ -571,8 +588,12 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, cursor common.Cursor, 
 
 				collected++
 
-				if !pastCursor(score, []byte(member)) {
+				if !pastCursor(score, member) {
 					continue // this element is still behind or at our cursor
+				}
+				if !beforeStop(score, member) {
+					hitStop = true
+					continue // this element is beyond our stop point
 				}
 
 				validated = append(validated, common.KeyScoreMember{Key: key, Score: score, Member: member})
@@ -584,7 +605,7 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, cursor common.Cursor, 
 				haveEnoughElements = len(validated) >= limit
 				exhaustedElements  = collected < selectLimit
 			)
-			if haveEnoughElements || exhaustedElements {
+			if haveEnoughElements || exhaustedElements || hitStop {
 				if len(validated) > limit {
 					validated = validated[:limit]
 				}
