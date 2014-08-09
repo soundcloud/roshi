@@ -217,66 +217,75 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 		}
 
 		var (
-			offset, offsetGiven    = parseInt(r.Form, "offset", 0)
-			cursorStr, cursorGiven = parseStr(r.Form, "cursor", "")
-			limit, _               = parseInt(r.Form, "limit", 10)
-			coalesce, _            = parseBool(r.Form, "coalesce", false)
+			offset, offsetGiven  = parseInt(r.Form, "offset", 0)
+			startStr, startGiven = parseStr(r.Form, "start", "")
+			stopStr, stopGiven   = parseStr(r.Form, "stop", "")
+			limit, _             = parseInt(r.Form, "limit", 10)
+			coalesce, _          = parseBool(r.Form, "coalesce", false)
 		)
 
 		switch {
-		case !offsetGiven && cursorGiven:
-			// SelectCursor. The presence of `coalesce` has no impact.
-			var cursor common.Cursor
-			if err := cursor.Parse(cursorStr); err != nil {
+		case !offsetGiven && startGiven:
+			// SelectRange. `coalesce` has no impact on the request, only the
+			// handling of the response.
+			var start, stop common.Cursor
+			if err := start.Parse(startStr); err != nil {
 				respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, err)
 				return
 			}
-			results, err := selecter.SelectCursor(keyStrings, cursor, limit)
+
+			if stopGiven {
+				if err := stop.Parse(stopStr); err != nil {
+					respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, err)
+					return
+				}
+			}
+
+			results, err := selecter.SelectRange(keyStrings, start, stop, limit)
 			if err != nil {
 				respondError(w, r.Method, r.URL.String(), http.StatusInternalServerError, err)
 				return
 			}
-			cursorResults := map[string][]keyScoreMemberCursor{}
-			for key, keyScoreMembers := range results {
-				keyScoreMemberCursors := make([]keyScoreMemberCursor, len(keyScoreMembers))
-				for i, keyScoreMember := range keyScoreMembers {
-					keyScoreMemberCursors[i] = keyScoreMemberCursor{
-						KeyScoreMember: keyScoreMember,
-						Cursor:         keyScoreMember.Cursor().String(),
-					}
-				}
-				cursorResults[key] = keyScoreMemberCursors
-			}
+
+			cursorResults := addCursor(results)
+
 			if coalesce {
-				respondSelected(w, flattenCursor(cursorResults, limit), time.Since(began))
+				respondSelected(w, flatten(cursorResults, 0, limit), time.Since(began))
 				return
 			}
-			respondSelected(w, cursorResults, time.Since(began))
+
+			respondSelected(w, results, time.Since(began))
 			return
 
-		case offsetGiven && !cursorGiven, !offsetGiven && !cursorGiven:
+		case offsetGiven && !startGiven, !offsetGiven && !startGiven:
 			// SelectOffset. The offset/limit may be altered by `coalesce`.
 			var (
 				selectOffset = offset
 				selectLimit  = limit
 			)
+
 			if coalesce {
 				selectOffset = 0
 				selectLimit = offset + limit
 			}
+
 			results, err := selecter.SelectOffset(keyStrings, selectOffset, selectLimit)
 			if err != nil {
 				respondError(w, r.Method, r.URL.String(), http.StatusInternalServerError, err)
 				return
 			}
+
+			cursorResults := addCursor(results)
+
 			if coalesce {
-				respondSelected(w, flattenOffset(results, offset, limit), time.Since(began))
+				respondSelected(w, flatten(cursorResults, offset, limit), time.Since(began))
 				return
 			}
-			respondSelected(w, results, time.Since(began))
+
+			respondSelected(w, cursorResults, time.Since(began))
 			return
 
-		case offsetGiven && cursorGiven:
+		case offsetGiven && startGiven:
 			respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, fmt.Errorf("cannot specify both offset and cursor"))
 			return
 
@@ -324,31 +333,43 @@ func handleDelete(deleter cluster.Deleter) http.HandlerFunc {
 	}
 }
 
-func flattenOffset(m map[string][]common.KeyScoreMember, offset, limit int) []common.KeyScoreMember {
-	a := []common.KeyScoreMember{}
-	for _, tuples := range m {
-		a = append(a, tuples...)
+func addCursor(in map[string][]common.KeyScoreMember) map[string][]keyScoreMemberCursor {
+	out := map[string][]keyScoreMemberCursor{}
+
+	for key, keyScoreMembers := range in {
+		keyScoreMemberCursors := make([]keyScoreMemberCursor, len(keyScoreMembers))
+
+		for i, keyScoreMember := range keyScoreMembers {
+			keyScoreMemberCursors[i] = keyScoreMemberCursor{
+				KeyScoreMember: keyScoreMember,
+				Cursor:         keyScoreMember.Cursor().String(),
+			}
+		}
+
+		out[key] = keyScoreMemberCursors
 	}
-	sort.Sort(keyScoreMembers(a))
-	if len(a) < offset {
-		return []common.KeyScoreMember{}
-	}
-	a = a[offset:]
-	if len(a) > limit {
-		a = a[:limit]
-	}
-	return a
+
+	return out
 }
 
-func flattenCursor(m map[string][]keyScoreMemberCursor, limit int) []keyScoreMemberCursor {
+func flatten(m map[string][]keyScoreMemberCursor, offset, limit int) []keyScoreMemberCursor {
 	a := []keyScoreMemberCursor{}
-	for _, tuples := range m {
-		a = append(a, tuples...)
+	for _, slice := range m {
+		a = append(a, slice...)
 	}
+
 	sort.Sort(keyScoreMemberCursors(a))
+
+	if len(a) < offset {
+		return []keyScoreMemberCursor{}
+	}
+
+	a = a[offset:]
+
 	if len(a) > limit {
 		a = a[:limit]
 	}
+
 	return a
 }
 

@@ -70,7 +70,7 @@ func (f *Farm) Insert(tuples []common.KeyScoreMember) error {
 // Selecter defines a synchronous Select API, implemented by Farm.
 type Selecter interface {
 	SelectOffset(keys []string, offset, limit int) (map[string][]common.KeyScoreMember, error)
-	SelectCursor(keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error)
+	SelectRange(keys []string, start, stop common.Cursor, limit int) (map[string][]common.KeyScoreMember, error)
 }
 
 // SelectOffset satisfies Selecter and invokes the ReadStrategy of the farm.
@@ -82,13 +82,13 @@ func (f *Farm) SelectOffset(keys []string, offset, limit int) (map[string][]comm
 	return f.selecter.SelectOffset(keys, offset, limit)
 }
 
-// SelectCursor satisfies Selecter and invokes the ReadStrategy of the farm.
-func (f *Farm) SelectCursor(keys []string, cursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
+// SelectRange satisfies Selecter and invokes the ReadStrategy of the farm.
+func (f *Farm) SelectRange(keys []string, start, stop common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
 	// High performance optimization.
 	if len(keys) <= 0 {
 		return map[string][]common.KeyScoreMember{}, nil
 	}
-	return f.selecter.SelectCursor(keys, cursor, limit)
+	return f.selecter.SelectRange(keys, start, stop, limit)
 }
 
 // Delete removes each tuple from the underlying clusters, if the score is
