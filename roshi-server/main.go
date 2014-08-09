@@ -225,13 +225,20 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 		)
 
 		switch {
-		case !offsetGiven && startGiven:
+		case !offsetGiven && (startGiven || stopGiven):
 			// SelectRange. `coalesce` has no impact on the request, only the
 			// handling of the response.
-			var start, stop common.Cursor
-			if err := start.Parse(startStr); err != nil {
-				respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, err)
-				return
+
+			var (
+				start = common.Cursor{Score: math.MaxFloat64}
+				stop  = common.Cursor{Score: 0}
+			)
+
+			if startGiven {
+				if err := start.Parse(startStr); err != nil {
+					respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, err)
+					return
+				}
 			}
 
 			if stopGiven {
@@ -257,7 +264,7 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 			respondSelected(w, results, time.Since(began))
 			return
 
-		case offsetGiven && !startGiven, !offsetGiven && !startGiven:
+		case !startGiven && !stopGiven:
 			// SelectOffset. The offset/limit may be altered by `coalesce`.
 			var (
 				selectOffset = offset
@@ -285,8 +292,8 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 			respondSelected(w, cursorResults, time.Since(began))
 			return
 
-		case offsetGiven && startGiven:
-			respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, fmt.Errorf("cannot specify both offset and cursor"))
+		case offsetGiven && (startGiven || stopGiven):
+			respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, fmt.Errorf("cannot specify both offset and start/stop"))
 			return
 
 		default:
