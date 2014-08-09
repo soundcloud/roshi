@@ -157,7 +157,7 @@ func (c *mockCluster) SelectOffset(keys []string, offset, limit int) <-chan clus
 	return ch
 }
 
-func (c *mockCluster) SelectCursor(keys []string, cursor, stopcursor common.Cursor, limit int) <-chan cluster.Element {
+func (c *mockCluster) SelectRange(keys []string, start, stop common.Cursor, limit int) <-chan cluster.Element {
 	ch := make(chan cluster.Element)
 	go func() { close(ch) }()
 	return ch

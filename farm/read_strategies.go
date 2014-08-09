@@ -33,10 +33,10 @@ func (s sendOneReadOne) SelectOffset(keys []string, offset, limit int) (map[stri
 	})
 }
 
-// SelectCursor implements farm.Selecter.
-func (s sendOneReadOne) SelectCursor(keys []string, cursor, stopcursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
+// SelectRange implements farm.Selecter.
+func (s sendOneReadOne) SelectRange(keys []string, start, stop common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
 	return s.read(len(keys), func(c cluster.Cluster) <-chan cluster.Element {
-		return c.SelectCursor(keys, cursor, stopcursor, limit)
+		return c.SelectRange(keys, start, stop, limit)
 	})
 }
 
@@ -98,10 +98,10 @@ func (s sendAllReadAll) SelectOffset(keys []string, offset, limit int) (map[stri
 	}, limit)
 }
 
-// SelectCursor implements farm.Selecter.
-func (s sendAllReadAll) SelectCursor(keys []string, cursor, stopcursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
+// SelectRange implements farm.Selecter.
+func (s sendAllReadAll) SelectRange(keys []string, start, stop common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
 	return s.read(len(keys), func(c cluster.Cluster) <-chan cluster.Element {
-		return c.SelectCursor(keys, cursor, stopcursor, limit)
+		return c.SelectRange(keys, start, stop, limit)
 	}, limit)
 }
 
@@ -232,10 +232,10 @@ func (s sendVarReadFirstLinger) SelectOffset(keys []string, offset, limit int) (
 	}, limit)
 }
 
-// SelectCursor implements farm.Selecter.
-func (s sendVarReadFirstLinger) SelectCursor(keys []string, cursor, stopcursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
+// SelectRange implements farm.Selecter.
+func (s sendVarReadFirstLinger) SelectRange(keys []string, start, stop common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
 	return s.read(keys, func(c cluster.Cluster, keys []string) <-chan cluster.Element {
-		return c.SelectCursor(keys, cursor, stopcursor, limit)
+		return c.SelectRange(keys, start, stop, limit)
 	}, limit)
 }
 

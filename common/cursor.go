@@ -8,7 +8,7 @@ import (
 	"math"
 )
 
-// Cursor is used as part of SelectCursor.
+// Cursor is used as part of SelectRange.
 type Cursor struct {
 	Score  float64
 	Member string

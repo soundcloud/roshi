@@ -43,7 +43,7 @@ type Inserter interface {
 // Selecter defines the methods to retrieve elements from a sorted set.
 type Selecter interface {
 	SelectOffset(keys []string, offset, limit int) <-chan Element
-	SelectCursor(keys []string, cursor, stopcursor common.Cursor, limit int) <-chan Element
+	SelectRange(keys []string, start, stop common.Cursor, limit int) <-chan Element
 }
 
 // Deleter defines the method to delete elements from a sorted set. A key-
@@ -188,11 +188,11 @@ func (c *cluster) SelectOffset(keys []string, offset, limit int) <-chan Element 
 	})
 }
 
-// SelectCursor uses ZREVRANGEBYSCORE to do a cursor-based select, similar to
+// SelectRange uses ZREVRANGEBYSCORE to do a cursor-based select, similar to
 // SelectOffset.
-func (c *cluster) SelectCursor(keys []string, cursor, stopcursor common.Cursor, limit int) <-chan Element {
+func (c *cluster) SelectRange(keys []string, start, stop common.Cursor, limit int) <-chan Element {
 	return c.selectCommon(keys, func(conn redis.Conn, myKeys []string) (map[string][]common.KeyScoreMember, error) {
-		return pipelineRangeByScore(conn, myKeys, cursor, stopcursor, limit)
+		return pipelineRangeByScore(conn, myKeys, start, stop, limit)
 	})
 }
 
