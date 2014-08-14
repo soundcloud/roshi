@@ -628,7 +628,7 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, start, stop common.Cur
 			}
 		}
 		keysToSelect = retryKeys
-		selectLimit *= 2
+		selectLimit *= 10
 	}
 
 	if n := len(keysToSelect); n > 0 {

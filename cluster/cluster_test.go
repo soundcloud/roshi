@@ -2,6 +2,7 @@ package cluster_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"reflect"
@@ -565,48 +566,22 @@ func TestCursorRetries(t *testing.T) {
 	// Build a new cluster.
 	c := integrationCluster(t, addresses, 1000)
 
+	elements := []common.KeyScoreMember{}
+	for i := 0; i < 234; i++ { // bigger than initial selectLimit minimum; less than 100 times that value
+		elements = append(elements, common.KeyScoreMember{
+			Key:    "foo",
+			Score:  1.23,
+			Member: fmt.Sprintf("%03d", i)},
+		)
+	}
+
 	// Insert many elements with the same score.
-	if err := c.Insert([]common.KeyScoreMember{
-		{"foo", 2.00, "pre"},
-		{"foo", 1.23, "mmm"}, // same score = reverse lex
-		{"foo", 1.23, "lll"},
-		{"foo", 1.23, "kkk"},
-		{"foo", 1.23, "jjj"},
-		{"foo", 1.23, "iii"},
-		{"foo", 1.23, "hhh"},
-		{"foo", 1.23, "ggg"},
-		{"foo", 1.23, "fff"},
-		{"foo", 1.23, "eee"},
-		{"foo", 1.23, "ddd"},
-		{"foo", 1.23, "ccc"},
-		{"foo", 1.23, "bbb"},
-		{"foo", 1.23, "aaa"},
-		{"foo", 0.01, "post"},
-	}); err != nil {
+	if err := c.Insert(elements); err != nil {
 		t.Fatal(err)
 	}
 
-	// Make a select from a cursor position of one of the last elements, with
-	// a low limit. A hard-coded, low maxRetries means this will fail. Note
-	// that this is testing the specific implementation: not a great unit
-	// test.
-	element := <-c.SelectRange([]string{"foo"}, common.Cursor{Score: 1.23, Member: "bbb"}, common.Cursor{}, 2)
-	if element.Error == nil {
-		t.Error("expected error, got none")
-	} else {
-		t.Logf("got expected error (%s)", element.Error)
-	}
-
-	// If we choose a higher limit, it should work.
-	element = <-c.SelectRange([]string{"foo"}, common.Cursor{Score: 1.23, Member: "bbb"}, common.Cursor{}, 5)
-	if element.Error != nil {
-		t.Errorf("got unexpected error: %s", element.Error)
-	} else {
-		t.Logf("OK: %v", element.KeyScoreMembers)
-	}
-
-	// If we choose a slightly earlier cursor, it should also work.
-	element = <-c.SelectRange([]string{"foo"}, common.Cursor{Score: 1.23, Member: "hhh"}, common.Cursor{}, 2)
+	// A Select with a low limit should still work, due to retries.
+	element := <-c.SelectRange([]string{"foo"}, common.Cursor{Score: 1.23, Member: "003"}, common.Cursor{}, 5)
 	if element.Error != nil {
 		t.Errorf("got unexpected error: %s", element.Error)
 	} else {
