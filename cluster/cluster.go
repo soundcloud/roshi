@@ -500,33 +500,33 @@ func pipelineRange(conn redis.Conn, keys []string, offset, limit int) (map[strin
 	return m, nil
 }
 
-func pipelineRangeByScore(conn redis.Conn, keys []string, cursor, stopcursor common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
+func pipelineRangeByScore(conn redis.Conn, keys []string, start, stop common.Cursor, limit int) (map[string][]common.KeyScoreMember, error) {
 	if limit < 0 {
 		// TODO maybe change that
 		return map[string][]common.KeyScoreMember{}, fmt.Errorf("negative limit is invalid for cursor-based select")
 	}
 
-	// pastCursor returns true when the score+member are "past" the cursor
+	// pastStart returns true when the score+member are "past" the cursor
 	// (smaller score, larger lexicographically) and can therefore be included
 	// in the resultset.
-	pastCursor := func(score float64, member string) bool {
-		if score < cursor.Score {
+	pastStart := func(score float64, member string) bool {
+		if score < start.Score {
 			return true
 		}
-		if score == cursor.Score && bytes.Compare([]byte(member), []byte(cursor.Member)) < 0 {
+		if score == start.Score && bytes.Compare([]byte(member), []byte(start.Member)) < 0 {
 			return true
 		}
 		return false
 	}
 
 	// beforeStop returns true as long as the score+member are "before" the
-	// stopcursor (larger score, smaller lexicographically) and can therefore
+	// stop (larger score, smaller lexicographically) and can therefore
 	// be included in the resultset.
 	beforeStop := func(score float64, member string) bool {
-		if score > stopcursor.Score {
+		if score > stop.Score {
 			return true
 		}
-		if score == stopcursor.Score && bytes.Compare([]byte(member), []byte(stopcursor.Member)) > 0 {
+		if score == stop.Score && bytes.Compare([]byte(member), []byte(stop.Member)) > 0 {
 			return true
 		}
 		return false
@@ -546,13 +546,18 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, cursor, stopcursor com
 		maxAttempts  = 3     // up to this many times (TODO could be paramaterized)
 		results      = map[string][]common.KeyScoreMember{}
 	)
+
+	if selectLimit < 25 {
+		selectLimit = 25 // make it worth the RTT
+	}
+
 	for attempt := 0; len(keysToSelect) > 0 && attempt < maxAttempts; attempt++ {
 		for _, key := range keysToSelect {
 			if err := conn.Send(
 				"ZREVRANGEBYSCORE",
 				key+insertSuffix,
-				fmt.Sprint(cursor.Score), // max
-				"-inf", // min
+				fmt.Sprint(start.Score), // max
+				"-inf",                  // min
 				"WITHSCORES",
 				"LIMIT",
 				0,
@@ -588,12 +593,12 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, cursor, stopcursor com
 
 				collected++
 
-				if !pastCursor(score, member) {
-					continue // this element is still behind or at our cursor
+				if !pastStart(score, member) {
+					continue // this element is behind or at our start point
 				}
 				if !beforeStop(score, member) {
 					hitStop = true
-					continue // this element is beyond our stop point
+					continue // this element is at or beyond our stop point
 				}
 
 				validated = append(validated, common.KeyScoreMember{Key: key, Score: score, Member: member})
@@ -614,6 +619,7 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, cursor, stopcursor com
 		}
 
 		retryKeys := make([]string, 0, len(keysToSelect))
+
 		for _, key := range keysToSelect {
 			if a, ok := m[key]; ok {
 				results[key] = a // use it
@@ -626,7 +632,7 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, cursor, stopcursor com
 	}
 
 	if n := len(keysToSelect); n > 0 {
-		return map[string][]common.KeyScoreMember{}, fmt.Errorf("%d key(s) failed to yield enough elements", n)
+		return map[string][]common.KeyScoreMember{}, fmt.Errorf("%d key(s) failed to yield enough elements (original limit %d)", n, limit)
 	}
 
 	return results, nil
