@@ -341,16 +341,19 @@ func handleDelete(deleter cluster.Deleter) http.HandlerFunc {
 }
 
 func addCursor(in map[string][]common.KeyScoreMember) map[string][]keyScoreMemberCursor {
-	out := map[string][]keyScoreMemberCursor{}
+	var (
+		out = make(map[string][]keyScoreMemberCursor, len(in))
+	)
+
+	// We do a little nonstandard dance with cursor encoding, here, as a
+	// result of memory profiling.
 
 	for key, keyScoreMembers := range in {
 		keyScoreMemberCursors := make([]keyScoreMemberCursor, len(keyScoreMembers))
 
 		for i, keyScoreMember := range keyScoreMembers {
-			keyScoreMemberCursors[i] = keyScoreMemberCursor{
-				KeyScoreMember: keyScoreMember,
-				Cursor:         keyScoreMember.Cursor().String(),
-			}
+			keyScoreMemberCursors[i].KeyScoreMember = keyScoreMember
+			keyScoreMember.Cursor().Encode(keyScoreMemberCursors[i].Cursor)
 		}
 
 		out[key] = keyScoreMemberCursors
@@ -480,8 +483,14 @@ func evaluateScalarPercentage(s string, n int) (int, error) {
 
 type keyScoreMemberCursor struct {
 	common.KeyScoreMember
-	Cursor string `json:"cursor"`
+	Cursor myBuffer `json:"cursor"`
 }
+
+type myBuffer struct{ bytes.Buffer }
+
+func (b myBuffer) MarshalJSON() ([]byte, error) { return b.Buffer.Bytes(), nil }
+
+func (b myBuffer) Write(p []byte) (int, error) { return b.Buffer.Write(p) }
 
 type keyScoreMembers []common.KeyScoreMember
 

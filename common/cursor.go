@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math"
 )
@@ -28,13 +29,23 @@ func (c Cursor) String() string {
 		buf = bytes.Buffer{}
 		enc = base64.NewEncoder(base64.URLEncoding, &buf)
 	)
+
 	if _, err := enc.Write([]byte(c.Member)); err != nil {
 		panic(err)
 	}
+
 	if err := enc.Close(); err != nil {
 		panic(err)
 	}
-	return fmt.Sprintf(cursorFormat, math.Float64bits(c.Score), buf.Bytes())
+
+	return fmt.Sprintf(cursorFormat, math.Float64bits(c.Score), buf.String())
+}
+
+func (c Cursor) Encode(w io.Writer) {
+	fmt.Fprintf(w, "%dA", math.Float64bits(c.Score))
+	enc := base64.NewEncoder(base64.URLEncoding, w)
+	enc.Write([]byte(c.Member))
+	enc.Close()
 }
 
 // Parse parses the cursor string into the Cursor object.
@@ -43,10 +54,12 @@ func (c *Cursor) Parse(s string) error {
 		score  uint64
 		member string
 	)
+
 	_, err := fmt.Fscanf(bytes.NewReader([]byte(s)), cursorFormat, &score, &member)
 	if err != nil {
 		return fmt.Errorf("invalid cursor string (%s)", err)
 	}
+
 	decoded, err := ioutil.ReadAll(base64.NewDecoder(base64.URLEncoding, bytes.NewReader([]byte(member))))
 	if err != nil {
 		return fmt.Errorf("invalid cursor string (%s)", err)
@@ -54,5 +67,6 @@ func (c *Cursor) Parse(s string) error {
 
 	c.Score = math.Float64frombits(score)
 	c.Member = string(decoded)
+
 	return nil
 }

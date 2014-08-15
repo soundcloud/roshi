@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"math"
 	"reflect"
 	"testing"
@@ -67,4 +68,31 @@ func TestCursorSafety(t *testing.T) {
 			}
 		}
 	}
+}
+
+func BenchmarkCursorString(b *testing.B) {
+	var cursor = Cursor{Score: 1.23, Member: "abcdefg"}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = cursor.String()
+	}
+
+	b.ReportAllocs()
+}
+
+func BenchmarkCursorEncode(b *testing.B) {
+	var (
+		cursor = Cursor{Score: 1.23, Member: "abcdefg"}
+		dst    = &bytes.Buffer{}
+	)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		cursor.Encode(dst)
+	}
+
+	b.ReportAllocs()
 }
