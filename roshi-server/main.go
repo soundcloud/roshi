@@ -254,10 +254,10 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 				return
 			}
 
-			cursorResults := addCursor(results)
+			//cursorResults := addCursor(results)
 
 			if coalesce {
-				respondSelected(w, flatten(cursorResults, 0, limit), time.Since(began))
+				respondSelected(w, flatten(results, 0, limit), time.Since(began))
 				return
 			}
 
@@ -282,14 +282,14 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 				return
 			}
 
-			cursorResults := addCursor(results)
+			//cursorResults := addCursor(results)
 
 			if coalesce {
-				respondSelected(w, flatten(cursorResults, offset, limit), time.Since(began))
+				respondSelected(w, flatten(results, offset, limit), time.Since(began))
 				return
 			}
 
-			respondSelected(w, cursorResults, time.Since(began))
+			respondSelected(w, results, time.Since(began))
 			return
 
 		case offsetGiven && (startGiven || stopGiven):
@@ -362,16 +362,16 @@ func addCursor(in map[string][]common.KeyScoreMember) map[string][]keyScoreMembe
 	return out
 }
 
-func flatten(m map[string][]keyScoreMemberCursor, offset, limit int) []keyScoreMemberCursor {
-	a := []keyScoreMemberCursor{}
+func flatten(m map[string][]common.KeyScoreMember, offset, limit int) []common.KeyScoreMember {
+	a := []common.KeyScoreMember{}
 	for _, slice := range m {
 		a = append(a, slice...)
 	}
 
-	sort.Sort(keyScoreMemberCursors(a))
+	sort.Sort(keyScoreMembers(a))
 
 	if len(a) < offset {
-		return []keyScoreMemberCursor{}
+		return []common.KeyScoreMember{}
 	}
 
 	a = a[offset:]
