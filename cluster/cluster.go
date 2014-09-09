@@ -3,7 +3,6 @@
 package cluster
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"math/rand"
@@ -478,25 +477,29 @@ func pipelineRange(conn redis.Conn, keys []string, offset, limit int) (map[strin
 	}
 
 	m := make(map[string][]common.KeyScoreMember, len(keys))
+
 	for _, key := range keys {
 		values, err := redis.Values(conn.Receive())
 		if err != nil {
 			return map[string][]common.KeyScoreMember{}, err
 		}
 
-		keyScoreMembers := make([]common.KeyScoreMember, 0, len(values))
+		var (
+			ksm             = common.KeyScoreMember{Key: key}
+			keyScoreMembers = make([]common.KeyScoreMember, 0, len(values))
+		)
+
 		for len(values) > 0 {
-			var (
-				member string
-				score  float64
-			)
-			if values, err = redis.Scan(values, &member, &score); err != nil {
+			if values, err = redis.Scan(values, &ksm.Member, &ksm.Score); err != nil {
 				return map[string][]common.KeyScoreMember{}, err
 			}
-			keyScoreMembers = append(keyScoreMembers, common.KeyScoreMember{Key: key, Score: score, Member: member})
+
+			keyScoreMembers = append(keyScoreMembers, ksm)
 		}
+
 		m[key] = keyScoreMembers
 	}
+
 	return m, nil
 }
 
@@ -513,7 +516,7 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, start, stop common.Cur
 		if score < start.Score {
 			return true
 		}
-		if score == start.Score && bytes.Compare([]byte(member), []byte(start.Member)) < 0 {
+		if score == start.Score && member < start.Member {
 			return true
 		}
 		return false
@@ -526,7 +529,7 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, start, stop common.Cur
 		if score > stop.Score {
 			return true
 		}
-		if score == stop.Score && bytes.Compare([]byte(member), []byte(stop.Member)) > 0 {
+		if score == stop.Score && member > stop.Member {
 			return true
 		}
 		return false
@@ -541,23 +544,20 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, start, stop common.Cur
 	// user-requested limit, double the limit and try again, up to N times.
 
 	var (
-		keysToSelect = keys  // start with all
-		selectLimit  = limit // double every time
-		maxAttempts  = 3     // up to this many times (TODO could be paramaterized)
-		results      = map[string][]common.KeyScoreMember{}
+		startScoreStr = fmt.Sprint(start.Score)
+		keysToSelect  = keys  // start with all
+		selectLimit   = limit // double every time
+		maxAttempts   = 4     // up to this many times (TODO could be paramaterized)
+		results       = make(map[string][]common.KeyScoreMember, len(keys))
 	)
-
-	if selectLimit < 25 {
-		selectLimit = 25 // make it worth the RTT
-	}
 
 	for attempt := 0; len(keysToSelect) > 0 && attempt < maxAttempts; attempt++ {
 		for _, key := range keysToSelect {
 			if err := conn.Send(
 				"ZREVRANGEBYSCORE",
 				key+insertSuffix,
-				fmt.Sprint(start.Score), // max
-				"-inf",                  // min
+				startScoreStr, // max
+				"-inf",        // min
 				"WITHSCORES",
 				"LIMIT",
 				0,
@@ -582,26 +582,25 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, start, stop common.Cur
 				collected = 0
 				validated = make([]common.KeyScoreMember, 0, len(values))
 				hitStop   = false
+				ksm       = common.KeyScoreMember{Key: key}
 			)
 
-			for len(values) > 0 {
-				var member string
-				var score float64
-				if values, err = redis.Scan(values, &member, &score); err != nil {
+			for len(values) > 0 && !hitStop {
+				if values, err = redis.Scan(values, &ksm.Member, &ksm.Score); err != nil {
 					return map[string][]common.KeyScoreMember{}, err
 				}
 
 				collected++
 
-				if !pastStart(score, member) {
+				if !pastStart(ksm.Score, ksm.Member) {
 					continue // this element is behind or at our start point
 				}
-				if !beforeStop(score, member) {
+				if !beforeStop(ksm.Score, ksm.Member) {
 					hitStop = true
 					continue // this element is at or beyond our stop point
 				}
 
-				validated = append(validated, common.KeyScoreMember{Key: key, Score: score, Member: member})
+				validated = append(validated, ksm)
 			}
 
 			// At this point, we know if we can use these elements, or need to
@@ -627,8 +626,16 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, start, stop common.Cur
 				retryKeys = append(retryKeys, key) // try again
 			}
 		}
+
 		keysToSelect = retryKeys
-		selectLimit *= 10
+
+		if selectLimit < 10 {
+			selectLimit = 25
+		} else if selectLimit < 100 {
+			selectLimit *= 2
+		} else {
+			selectLimit += 50
+		}
 	}
 
 	if n := len(keysToSelect); n > 0 {

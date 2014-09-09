@@ -141,6 +141,7 @@ func main() {
 	r := pat.New()
 	r.Add("GET", "/metrics", http.DefaultServeMux)
 	r.Add("GET", "/debug", http.DefaultServeMux)
+	r.Add("POST", "/debug", http.DefaultServeMux)
 	r.Get("/", handleSelect(farm))
 	r.Post("/", handleInsert(farm))
 	r.Delete("/", handleDelete(farm))

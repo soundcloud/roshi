@@ -159,9 +159,10 @@ func (f *Farm) write(
 func unionDifference(tupleSets []tupleSet) (tupleSet, keyMemberSet) {
 	var (
 		expectedCount = len(tupleSets)
-		counts        = map[common.KeyScoreMember]int{}
-		scores        = map[common.KeyMember]float64{}
+		scores        = make(map[common.KeyMember]float64, len(tupleSets)*10)
+		counts        = make(map[common.KeyScoreMember]int, len(tupleSets)*10)
 	)
+
 	for _, tupleSet := range tupleSets {
 		for tuple := range tupleSet {
 			// For union
@@ -169,15 +170,17 @@ func unionDifference(tupleSets []tupleSet) (tupleSet, keyMemberSet) {
 			if score, ok := scores[keyMember]; !ok || tuple.Score > score {
 				scores[keyMember] = tuple.Score
 			}
+
 			// For difference
 			counts[tuple]++
 		}
 	}
 
 	var (
-		union      = tupleSet{}
-		difference = keyMemberSet{}
+		union      = make(tupleSet, len(scores))
+		difference = make(keyMemberSet, len(counts))
 	)
+
 	for keyMember, bestScore := range scores {
 		union.add(common.KeyScoreMember{
 			Key:    keyMember.Key,
@@ -185,6 +188,7 @@ func unionDifference(tupleSets []tupleSet) (tupleSet, keyMemberSet) {
 			Member: keyMember.Member,
 		})
 	}
+
 	for keyScoreMember, count := range counts {
 		if count < expectedCount {
 			difference.add(common.KeyMember{
@@ -193,6 +197,7 @@ func unionDifference(tupleSets []tupleSet) (tupleSet, keyMemberSet) {
 			})
 		}
 	}
+
 	return union, difference
 }
 
