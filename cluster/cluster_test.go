@@ -567,7 +567,7 @@ func TestCursorRetries(t *testing.T) {
 	c := integrationCluster(t, addresses, 1000)
 
 	elements := []common.KeyScoreMember{}
-	for i := 0; i < 234; i++ { // bigger than initial selectLimit minimum; less than 100 times that value
+	for i := 0; i < 50; i++ {
 		elements = append(elements, common.KeyScoreMember{
 			Key:    "foo",
 			Score:  1.23,
