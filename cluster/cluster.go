@@ -544,10 +544,11 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, start, stop common.Cur
 	// user-requested limit, double the limit and try again, up to N times.
 
 	var (
-		keysToSelect = keys  // start with all
-		selectLimit  = limit // double every time
-		maxAttempts  = 4     // up to this many times (TODO could be paramaterized)
-		results      = make(map[string][]common.KeyScoreMember, len(keys))
+		startScoreStr = fmt.Sprint(start.Score)
+		keysToSelect  = keys  // start with all
+		selectLimit   = limit // double every time
+		maxAttempts   = 4     // up to this many times (TODO could be paramaterized)
+		results       = make(map[string][]common.KeyScoreMember, len(keys))
 	)
 
 	for attempt := 0; len(keysToSelect) > 0 && attempt < maxAttempts; attempt++ {
@@ -555,8 +556,8 @@ func pipelineRangeByScore(conn redis.Conn, keys []string, start, stop common.Cur
 			if err := conn.Send(
 				"ZREVRANGEBYSCORE",
 				key+insertSuffix,
-				fmt.Sprint(start.Score), // max
-				"-inf",                  // min
+				startScoreStr, // max
+				"-inf",        // min
 				"WITHSCORES",
 				"LIMIT",
 				0,
