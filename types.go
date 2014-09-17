@@ -37,7 +37,7 @@ type timingUpdate struct {
 }
 
 func (u *timingUpdate) Message() string {
-	return fmt.Sprintf("%s:%d|ms%s\n", u.bucket, u.ms, u.sampling.Suffix())
+	return fmt.Sprintf("%s:%d|ms\n", u.bucket, u.ms)
 }
 
 type gaugeUpdate struct {
@@ -47,5 +47,5 @@ type gaugeUpdate struct {
 }
 
 func (u *gaugeUpdate) Message() string {
-	return fmt.Sprintf("%s:%s|g%s\n", u.bucket, u.val, u.sampling.Suffix())
+	return fmt.Sprintf("%s:%s|g\n", u.bucket, u.val)
 }
