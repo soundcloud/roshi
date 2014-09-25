@@ -308,6 +308,7 @@ func handleInsert(inserter cluster.Inserter) http.HandlerFunc {
 		began := time.Now()
 
 		var tuples []common.KeyScoreMember
+		defer r.Body.Close()
 		if err := json.NewDecoder(r.Body).Decode(&tuples); err != nil {
 			respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, err)
 			return
@@ -327,6 +328,7 @@ func handleDelete(deleter cluster.Deleter) http.HandlerFunc {
 		began := time.Now()
 
 		var tuples []common.KeyScoreMember
+		defer r.Body.Close()
 		if err := json.NewDecoder(r.Body).Decode(&tuples); err != nil {
 			respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, err)
 			return
