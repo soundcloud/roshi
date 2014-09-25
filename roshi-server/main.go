@@ -207,11 +207,11 @@ func handleSelect(selecter farm.Selecter) http.HandlerFunc {
 		}
 
 		var keys [][]byte
-		defer r.Body.Close()
 		if err := json.NewDecoder(r.Body).Decode(&keys); err != nil {
 			respondError(w, r.Method, r.URL.String(), http.StatusBadRequest, err)
 			return
 		}
+
 		keyStrings := make([]string, len(keys))
 		for i := range keys {
 			keyStrings[i] = string(keys[i])
