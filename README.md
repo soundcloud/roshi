@@ -2,10 +2,12 @@
 
 Get to Statsd: forward simple statistics to a statsd server.
 
-[![Build Status][1]][2]
+[![Build Status][1]][2] [![GoDoc][3]][4]
 
 [1]: https://secure.travis-ci.org/peterbourgon/g2s.png
 [2]: http://www.travis-ci.org/peterbourgon/g2s
+[3]: https://godoc.org/github.com/peterbourgon/g2s?status.svg
+[4]: https://godoc.org/github.com/peterbourgon/g2s
 
 # Usage
 
