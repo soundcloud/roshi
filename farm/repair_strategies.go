@@ -124,10 +124,10 @@ func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrume
 			)
 
 			for _, presence := range presenceSlice {
-				if presence.Present && presence.Score > highestScore {
+				if presence.Present && presence.Score >= highestScore {
 					found = true
 					highestScore = presence.Score
-					wasInserted = presence.Inserted
+					wasInserted = wasInserted || presence.Inserted // https://github.com/soundcloud/roshi/issues/24
 				}
 			}
 
