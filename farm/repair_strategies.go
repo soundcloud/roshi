@@ -104,6 +104,7 @@ func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrume
 				log.Printf("AllRepairs: cluster %d: %s", index, err)
 				continue
 			}
+
 			// Copy this cluster's presence information into our map.
 			for keyMember, presence := range scoreResponse {
 				presenceMap[keyMember][index] = presence
@@ -116,18 +117,23 @@ func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrume
 		deletes := map[int][]common.KeyScoreMember{}
 		for keyMember, presenceSlice := range presenceMap {
 			// Walk once, to determine the correct state.
-			found, highestScore, wasInserted := false, 0., false
+			var (
+				found        = false
+				highestScore = 0.
+				wasInserted  = false
+			)
+
 			for _, presence := range presenceSlice {
-				if presence.Present && presence.Score > highestScore {
+				if presence.Present && presence.Score >= highestScore {
 					found = true
 					highestScore = presence.Score
-					wasInserted = presence.Inserted
+					wasInserted = wasInserted || presence.Inserted // https://github.com/soundcloud/roshi/issues/24
 				}
 			}
 
 			if !found {
 				// This is indeed a strange situation, but it can arise if we
-				// get errors from every cluster during Score requests,, for
+				// get errors from every cluster during Score requests, for
 				// example. We don't want to confuse that with presence in the
 				// remove set.
 				log.Printf("AllRepairs: %v not found anywhere, skipping", keyMember)
@@ -143,15 +149,16 @@ func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrume
 
 			// Walk again, to schedule write operations.
 			for index, presence := range presenceSlice {
-				notThere := !presence.Present
-				lowScore := presence.Score < highestScore
-				wrongSet := presence.Inserted != wasInserted
+				var (
+					notThere = !presence.Present
+					lowScore = presence.Score < highestScore
+					wrongSet = presence.Inserted != wasInserted
+				)
+
 				if notThere || lowScore || wrongSet {
 					if wasInserted {
-						//log.Printf("AllRepairs: cluster %d: Insert %v", index, keyScoreMember)
 						inserts[index] = append(inserts[index], keyScoreMember)
 					} else {
-						//log.Printf("AllRepairs: cluster %d: Delete %v", index, keyScoreMember)
 						deletes[index] = append(deletes[index], keyScoreMember)
 					}
 				}
@@ -159,11 +166,13 @@ func AllRepairs(clusters []cluster.Cluster, instr instrumentation.RepairInstrume
 		}
 
 		// Make write operations.
+
 		for index, keyScoreMembers := range inserts {
 			if err := clusters[index].Insert(keyScoreMembers); err != nil {
 				log.Printf("AllRepairs: cluster %d: during Insert: %s", index, err)
 			}
 		}
+
 		for index, keyScoreMembers := range deletes {
 			if err := clusters[index].Delete(keyScoreMembers); err != nil {
 				log.Printf("AllRepairs: cluster %d: during Delete: %s", index, err)
