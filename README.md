@@ -37,12 +37,12 @@ Next, we will explain the system design.
 
 ## CRDT
 
-CRDTs (convergent replicated data types) are data types on which the same set
-of operations yields the same outcome, regardless of order of execution and
-duplication of operations. This allows data convergence without the need for
-consenus between replicas. In turn, this allows for easier implementation (no
-consensus protocol implementation) as well as lower latency (no wait-time for
-consensus).
+CRDTs (conflict-free replicated data types) are data types on which the same 
+set of operations yields the same outcome, regardless of order of execution 
+and duplication of operations. This allows data convergence without the need 
+for consenus between replicas. In turn, this allows for easier implementation 
+(no consensus protocol implementation) as well as lower latency (no wait-time 
+for consensus).
 
 Operations on CRDTs need to adhere [to the following rules][mixu]:
 
