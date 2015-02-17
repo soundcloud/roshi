@@ -99,7 +99,7 @@ func (p *Pool) ID(index int) string {
 }
 
 // Close closes all available (idle) connections in the cluster.
-// Close does not affect oustanding (in-use) connections.
+// Close does not affect outstanding (in-use) connections.
 func (p *Pool) Close() error {
 	for _, pool := range p.connections {
 		pool.closeAll()
