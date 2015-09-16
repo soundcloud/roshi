@@ -7,6 +7,8 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
+	"strconv"
+	"strings"
 )
 
 // Cursor is used as part of SelectRange.
@@ -50,19 +52,19 @@ func (c Cursor) Encode(w io.Writer) {
 
 // Parse parses the cursor string into the Cursor object.
 func (c *Cursor) Parse(s string) error {
-	var (
-		score  uint64
-		member string
-	)
-
-	_, err := fmt.Fscanf(bytes.NewReader([]byte(s)), cursorFormat, &score, &member)
-	if err != nil {
-		return fmt.Errorf("invalid cursor string (%s)", err)
+	fields := strings.SplitN(s, "A", 2)
+	if len(fields) != 2 {
+		return fmt.Errorf("invalid cursor string (%s)", s)
 	}
 
-	decoded, err := ioutil.ReadAll(base64.NewDecoder(base64.URLEncoding, bytes.NewReader([]byte(member))))
+	score, err := strconv.ParseUint(fields[0], 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid cursor string (%s)", err)
+		return fmt.Errorf("invalid score in cursor string (%s)", err)
+	}
+
+	decoded, err := ioutil.ReadAll(base64.NewDecoder(base64.URLEncoding, bytes.NewReader([]byte(fields[1]))))
+	if err != nil {
+		return fmt.Errorf("invalid member in cursor string (%s)", err)
 	}
 
 	c.Score = math.Float64frombits(score)
