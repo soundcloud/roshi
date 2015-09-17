@@ -29,8 +29,14 @@ func TestAllRepairs(t *testing.T) {
 		if i == 0 {
 			expected = second
 		}
-		if got := <-clusters[i].SelectOffset([]string{"foo"}, 0, 10); !reflect.DeepEqual(expected, got.KeyScoreMembers[0]) {
+		got := <-clusters[i].SelectOffset([]string{"foo"}, 0, 10)
+		if len(got.KeyScoreMembers) <= 0 {
+			t.Errorf("pre-repair: cluster %d: only got %d responses", i, len(got.KeyScoreMembers))
+			continue
+		}
+		if !reflect.DeepEqual(expected, got.KeyScoreMembers[0]) {
 			t.Errorf("pre-repair: cluster %d: expected %+v, got %+v", i, expected, got.KeyScoreMembers[0])
+			continue
 		}
 	}
 

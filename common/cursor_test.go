@@ -70,6 +70,16 @@ func TestCursorSafety(t *testing.T) {
 	}
 }
 
+func TestIssue37(t *testing.T) {
+	c := Cursor{}
+	if err := c.Parse("4743834931740803072A"); err != nil {
+		t.Fatal(err)
+	}
+	if want, have := "", c.Member; want != have {
+		t.Errorf("want %q, have %q", want, have)
+	}
+}
+
 func BenchmarkCursorString(b *testing.B) {
 	var cursor = Cursor{Score: 1.23, Member: "abcdefg"}
 
