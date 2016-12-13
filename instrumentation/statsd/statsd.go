@@ -37,11 +37,11 @@ func (i statsdInstrumentation) InsertRecordCount(n int) {
 }
 
 func (i statsdInstrumentation) InsertCallDuration(d time.Duration) {
-	i.statter.Timing(i.sampleRate, i.prefix+"insert.call.duration", d)
+	i.statter.Timing(i.prefix+"insert.call.duration", d)
 }
 
 func (i statsdInstrumentation) InsertRecordDuration(d time.Duration) {
-	i.statter.Timing(i.sampleRate, i.prefix+"insert.record.duration", d)
+	i.statter.Timing(i.prefix+"insert.record.duration", d)
 }
 
 func (i statsdInstrumentation) InsertQuorumFailure() {
@@ -61,7 +61,7 @@ func (i statsdInstrumentation) SelectSendTo(n int) {
 }
 
 func (i statsdInstrumentation) SelectFirstResponseDuration(d time.Duration) {
-	i.statter.Timing(i.sampleRate, i.prefix+"select.first_response.duration", d)
+	i.statter.Timing(i.prefix+"select.first_response.duration", d)
 }
 
 func (i statsdInstrumentation) SelectPartialError() {
@@ -69,15 +69,15 @@ func (i statsdInstrumentation) SelectPartialError() {
 }
 
 func (i statsdInstrumentation) SelectBlockingDuration(d time.Duration) {
-	i.statter.Timing(i.sampleRate, i.prefix+"select.blocking.duration", d)
+	i.statter.Timing(i.prefix+"select.blocking.duration", d)
 }
 
 func (i statsdInstrumentation) SelectOverheadDuration(d time.Duration) {
-	i.statter.Timing(i.sampleRate, i.prefix+"select.overhead.duration", d)
+	i.statter.Timing(i.prefix+"select.overhead.duration", d)
 }
 
 func (i statsdInstrumentation) SelectDuration(d time.Duration) {
-	i.statter.Timing(i.sampleRate, i.prefix+"select.duration", d)
+	i.statter.Timing(i.prefix+"select.duration", d)
 }
 
 func (i statsdInstrumentation) SelectSendAllPermitGranted() {
@@ -113,11 +113,11 @@ func (i statsdInstrumentation) DeleteRecordCount(n int) {
 }
 
 func (i statsdInstrumentation) DeleteCallDuration(d time.Duration) {
-	i.statter.Timing(i.sampleRate, i.prefix+"delete.call.duration", d)
+	i.statter.Timing(i.prefix+"delete.call.duration", d)
 }
 
 func (i statsdInstrumentation) DeleteRecordDuration(d time.Duration) {
-	i.statter.Timing(i.sampleRate, i.prefix+"delete.record.duration", d)
+	i.statter.Timing(i.prefix+"delete.record.duration", d)
 }
 
 func (i statsdInstrumentation) DeleteQuorumFailure() {
