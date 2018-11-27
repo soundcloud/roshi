@@ -187,7 +187,7 @@ semantics.
 
 As an example, all of these write operations would return true.
 
-Write operation         | Final state           |
+Write operation         | Final state           | Operation description
 ------------------------|-----------------------|---------------
 Insert("foo", 3, "bar") | foo+ bar/3<br/>foo- — | Initial write
 Insert("foo", 3, "bar") | foo+ bar/3<br/>foo- — | No-op: incoming score doesn't beat existing score
