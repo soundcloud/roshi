@@ -1,9 +1,7 @@
 language: go
 
 go:
-    - tip
-    - 1.5
-    - 1.4
+    - 1.14.x
 
 services:
     - redis-server
@@ -16,4 +14,3 @@ before_script:
 
 script:
     - go test -v ./...
-

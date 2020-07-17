@@ -390,7 +390,7 @@ func TestSelectRange(t *testing.T) {
 		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
 	}
 	if _, ok := <-ch; ok {
-		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple", e.Key)
 	}
 
 	// Top of the list.
@@ -414,7 +414,7 @@ func TestSelectRange(t *testing.T) {
 		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
 	}
 	if _, ok := <-ch; ok {
-		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple", e.Key)
 	}
 
 	// Restricted limit.
@@ -432,7 +432,7 @@ func TestSelectRange(t *testing.T) {
 		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
 	}
 	if _, ok := <-ch; ok {
-		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple", e.Key)
 	}
 
 	// Multiple keys, top of the list, all elements.
@@ -535,7 +535,7 @@ func TestSelectRange(t *testing.T) {
 		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
 	}
 	if _, ok := <-ch; ok {
-		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple", e.Key)
 	}
 
 	// Middle of the list, using the stopcursor.
@@ -552,7 +552,7 @@ func TestSelectRange(t *testing.T) {
 		t.Fatalf("key %q: expected \n\t%+v, got \n\t%+v", e.Key, expected, got)
 	}
 	if _, ok := <-ch; ok {
-		t.Fatalf("key %q: expected 1 element on the channel, got multiple")
+		t.Fatalf("key %q: expected 1 element on the channel, got multiple", e.Key)
 	}
 }
 
