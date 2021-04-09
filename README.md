@@ -234,7 +234,7 @@ Failures of Redis instances over independent data shards don't affect
 instantaneous data durability. However, over time, independent Redis instance
 failures can lead to data loss, especially on keys which are not regularly
 read-repaired.
-In practice, a number of strategies may be used to probabilisticly mitigate
+In practice, a number of strategies may be used to probabilistically mitigate
 this concern. For example, walking modified keys after known outages, or the
 whole keyspace at regular intervals, which will trigger read-repairs for
 inconsistent sets.
