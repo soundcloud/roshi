@@ -19,6 +19,7 @@ func TestAllRepairs(t *testing.T) {
 	// Make inserts, no repair.
 	first := common.KeyScoreMember{Key: "foo", Score: 1., Member: "bar"}
 	second := common.KeyScoreMember{Key: "foo", Score: 2.34, Member: "bar"}
+
 	farm.Insert([]common.KeyScoreMember{first})         // perfect insert
 	clusters[0].Insert([]common.KeyScoreMember{second}) // imperfect insert
 

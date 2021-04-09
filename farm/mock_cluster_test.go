@@ -4,6 +4,7 @@ import (
 	"errors"
 	"reflect"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -78,14 +79,16 @@ type mockCluster struct {
 	countScore        int32
 	countKeys         int32
 	countOpenChannels int32
+	mutex             *sync.Mutex
 }
 
 var mockClusterIDs int32
 
 func newMockCluster() *mockCluster {
 	return &mockCluster{
-		id: atomic.AddInt32(&mockClusterIDs, 1),
-		m:  map[string]map[string]float64{},
+		id:    atomic.AddInt32(&mockClusterIDs, 1),
+		m:     map[string]map[string]float64{},
+		mutex: &sync.Mutex{},
 	}
 }
 
@@ -93,10 +96,14 @@ func newFailingMockCluster() *mockCluster {
 	return &mockCluster{
 		m:       map[string]map[string]float64{},
 		failing: true,
+		mutex:   &sync.Mutex{},
 	}
 }
 
 func (c *mockCluster) Insert(keyScoreMembers []common.KeyScoreMember) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	atomic.AddInt32(&c.countInsert, 1)
 	if c.failing {
 		return errors.New("failtown, population you")
@@ -129,6 +136,9 @@ func (c *mockCluster) SelectOffset(keys []string, offset, limit int) <-chan clus
 	}
 	atomic.AddInt32(&c.countOpenChannels, 1)
 	go func() {
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
+
 		defer func() {
 			close(ch)
 			atomic.AddInt32(&c.countOpenChannels, -1)
@@ -193,6 +203,9 @@ func (a scoreMemberSlice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a scoreMemberSlice) Less(i, j int) bool { return a[i].score > a[j].score }
 
 func (c *mockCluster) Delete(keyScoreMembers []common.KeyScoreMember) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	atomic.AddInt32(&c.countDelete, 1)
 	if c.failing {
 		return errors.New("failtown, population you")
@@ -223,12 +236,16 @@ func (c *mockCluster) Delete(keyScoreMembers []common.KeyScoreMember) error {
 // Score in this mock implementation will never return a score for
 // deleted entries.
 func (c *mockCluster) Score(keyMembers []common.KeyMember) (map[common.KeyMember]cluster.Presence, error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	atomic.AddInt32(&c.countScore, 1)
 	if c.failing {
 		return map[common.KeyMember]cluster.Presence{}, errors.New("failtown, population you")
 	}
 
 	m := map[common.KeyMember]cluster.Presence{}
+
 	for _, keyMember := range keyMembers {
 		members, ok := c.m[keyMember.Key]
 		if !ok {
@@ -250,11 +267,15 @@ func (c *mockCluster) Score(keyMembers []common.KeyMember) (map[common.KeyMember
 }
 
 func (c *mockCluster) Keys(batchSize int) <-chan []string {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	atomic.AddInt32(&c.countKeys, 1)
 
 	// Copy keys from c.m, so that at least after this method has returned,
 	// we don't run into issues with concurrent modifications.
 	a := make([]string, 0, len(c.m))
+
 	for key := range c.m {
 		a = append(a, key)
 	}
@@ -278,6 +299,9 @@ func (c *mockCluster) Keys(batchSize int) <-chan []string {
 }
 
 func (c *mockCluster) clear() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	c.m = map[string]map[string]float64{}
 }
 
