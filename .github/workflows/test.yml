@@ -1,0 +1,34 @@
+name: Test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16
+
+    # Some tests require an already-running Redis server, some require the
+    # redis-server binary. Install Redis directly on the test instance, this
+    # also starts a server on port 6379.
+    - name: Install redis-server
+      run: sudo apt-get install redis-server
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v ./...
+      env:
+        TEST_REDIS_ADDRESSES: "localhost:6379"
