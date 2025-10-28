@@ -22,13 +22,6 @@ import (
 	"github.com/gorilla/pat"
 	"github.com/peterbourgon/g2s"
 
-	"github.com/soundcloud/roshi/cluster"
-	"github.com/soundcloud/roshi/common"
-	"github.com/soundcloud/roshi/farm"
-	"github.com/soundcloud/roshi/instrumentation"
-	"github.com/soundcloud/roshi/instrumentation/prometheus"
-	"github.com/soundcloud/roshi/instrumentation/statsd"
-	"github.com/soundcloud/roshi/pool"
 )
 
 func main() {

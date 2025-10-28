@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/gorilla/pat"
-	"github.com/soundcloud/roshi/common"
 )
 
 func TestEvaluateScalarPercentage(t *testing.T) {

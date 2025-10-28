@@ -7,7 +7,6 @@ instances (at least 1) to be running somewhere as the data layer. roshi-server
 is effectively stateless, so you may run as many instances as required to
 satisfy your load volume.
 
-[farm]: http://github.com/soundcloud/roshi/blob/master/farm
 
 ## Getting and building
 
@@ -16,7 +15,6 @@ stability over time. Users should get and build roshi-server by cloning this
 repository and running `make` in the roshi-server subdirectory. A working Go
 toolchain is assumed.
 
-    git clone git@github.com:soundcloud/roshi
     cd roshi/roshi-server
     make
 
@@ -122,7 +120,6 @@ $ curl -Ss -d@delete.json -XDELETE 'http://localhost:6302' | jq .
 ## Integrating with your code
 
 Golang clients that wish to make HTTP requests to roshi-server should
-`import "github.com/soundcloud/roshi/common"` and interact with (i.e. serialize
 and deserialize) `common.KeyScoreMember` tuples directly. That type implements
 `json.Marshaler` such that base64 encoding and decoding is transparent to the
 user.

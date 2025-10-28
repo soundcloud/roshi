@@ -11,12 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/soundcloud/roshi/cluster"
-	"github.com/soundcloud/roshi/farm"
-	"github.com/soundcloud/roshi/instrumentation"
-	"github.com/soundcloud/roshi/instrumentation/prometheus"
-	"github.com/soundcloud/roshi/instrumentation/statsd"
-	"github.com/soundcloud/roshi/pool"
 
 	"github.com/peterbourgon/g2s"
 	"github.com/tsenart/tb"

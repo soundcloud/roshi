@@ -12,9 +12,6 @@ import (
 
 	"github.com/garyburd/redigo/redis"
 
-	"github.com/soundcloud/roshi/cluster"
-	"github.com/soundcloud/roshi/common"
-	"github.com/soundcloud/roshi/pool"
 )
 
 func TestInsertSelectOffsetKeys(t *testing.T) {

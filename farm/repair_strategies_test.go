@@ -6,8 +6,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/soundcloud/roshi/common"
-	"github.com/soundcloud/roshi/instrumentation"
 )
 
 func TestAllRepairs(t *testing.T) {

@@ -10,8 +10,6 @@ import (
 
 	"github.com/tsenart/tb"
 
-	"github.com/soundcloud/roshi/cluster"
-	"github.com/soundcloud/roshi/common"
 )
 
 // ReadStrategy is a function that yields a farm.Selecter with a specific

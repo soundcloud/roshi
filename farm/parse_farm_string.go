@@ -7,9 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/soundcloud/roshi/cluster"
-	"github.com/soundcloud/roshi/instrumentation"
-	"github.com/soundcloud/roshi/pool"
 )
 
 // ParseFarmString parses a farm declaration string into a slice of clusters.

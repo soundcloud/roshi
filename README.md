@@ -1,4 +1,3 @@
-# roshi [![Build Status](https://travis-ci.org/soundcloud/roshi.png)](https://travis-ci.org/soundcloud/roshi) [![GoDoc](https://godoc.org/github.com/soundcloud/roshi?status.svg)](http://godoc.org/github.com/soundcloud/roshi)
 
 Roshi implements a time-series event storage via a LWW-element-set CRDT with
 limited inline garbage collection. Roshi is a stateless, distributed layer on
@@ -26,7 +25,6 @@ designed to sit in the critical (request) path of your application or service.
 The originating use case is the SoundCloud stream; see [this blog post][blog]
 for details.
 
-[blog]: http://developers.soundcloud.com/blog/roshi-a-crdt-system-for-timestamped-events
 
 # Theory and system properties
 
@@ -133,7 +131,6 @@ all replicas.
 [Package farm][farm] explains replication, read strategies, and read-repair
 further.
 
-[farm]: http://github.com/soundcloud/roshi/tree/master/farm
 
 ## Fault tolerance
 
@@ -284,13 +281,8 @@ job with a relatively small surface area. From the bottom up...
   repairs.
 
 [sorted-set]: http://redis.io/commands#sorted_set
-[pool]: http://github.com/soundcloud/roshi/tree/master/pool
-[cluster]: http://github.com/soundcloud/roshi/tree/master/cluster
 [commutativity]: http://en.wikipedia.org/wiki/Commutative_property
-[farm]: http://github.com/soundcloud/roshi/tree/master/farm
-[roshi-server]: http://github.com/soundcloud/roshi/tree/master/roshi-server
 [twelve]: http://12factor.net
-[roshi-walker]: http://github.com/soundcloud/roshi/tree/master/roshi-walker
 
 ## The big picture
 

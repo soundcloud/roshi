@@ -6,7 +6,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/soundcloud/roshi/instrumentation"
 )
 
 // Satisfaction guaranteed.

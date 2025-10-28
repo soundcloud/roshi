@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/soundcloud/roshi/common"
 )
 
 func TestMakeSet(t *testing.T) {

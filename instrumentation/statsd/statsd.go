@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/peterbourgon/g2s"
-	"github.com/soundcloud/roshi/instrumentation"
 )
 
 // Satisfaction guaranteed.

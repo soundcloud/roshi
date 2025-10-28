@@ -1,6 +1,5 @@
 # cluster
 
-[![GoDoc](https://godoc.org/github.com/soundcloud/roshi/cluster?status.png)](https://godoc.org/github.com/soundcloud/roshi/cluster)
 
 Package cluster provides an Insert/Select/Delete API on top of a single
 [Pool object][pool]. Cluster accepts KeyScoreMember tuples from clients,
@@ -10,7 +9,6 @@ associated with the element. Write (Insert or Delete) operations are no-ops if
 the passed score is less than or equal to any previously written score for
 that member.
 
-[pool]: https://godoc.org/github.com/soundcloud/roshi/pool#Pool
 [zset]: http://redis.io/commands#sorted-set
 
 All elements of the KeyScoreMember tuple are expected to be provided by the
@@ -67,4 +65,3 @@ via reads—for example, by intelligently comparing results from multiple
 clusters—we immediately have enough information to issue repairing write
 operations against the inconsistent clusters.
 
-[select]: http://godoc.org/github.com/soundcloud/roshi/cluster#Select

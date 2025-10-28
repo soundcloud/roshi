@@ -1,13 +1,11 @@
 # farm
 
-[![GoDoc](https://godoc.org/github.com/soundcloud/roshi/farm?status.png)](https://godoc.org/github.com/soundcloud/roshi/farm)
 
 Package farm provides a single logical Insert/Select/Delete API on top of
 multiple independent [clusters][cluster]. Package farm ensures that writes
 (Insert and Delete) are made to as many clusters as possible, and uses one of
 several [read strategies](#read_strategies) to perform reads (Select).
 
-[cluster]: https://github.com/soundcloud/roshi/blob/master/cluster
 
 ## Writing
 
@@ -126,4 +124,3 @@ Inconsistent keys can only be repaired if they're read. To guard against long
 term data corruption, the [roshi- walker][walker] component is designed to
 continuously walk the keyspace to enforce data consistency.
 
-[walker]: https://github.com/soundcloud/roshi/blob/master/roshi-walker

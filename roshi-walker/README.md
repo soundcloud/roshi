@@ -7,7 +7,6 @@ user-defined rate. It makes Select request for each key, using the
 read repair.
 
 [scan]: http://redis.io/commands/scan
-[send-all-read-all]: https://github.com/soundcloud/roshi/tree/master/farm#read-strategies
 
 ## Getting and building
 
@@ -16,7 +15,6 @@ stability over time. Users should get and build roshi-walker by cloning this
 repository and running `make` in the roshi-walker subdirectory. A working Go
 toolchain is assumed.
 
-    git clone git@github.com:soundcloud/roshi
     cd roshi/roshi-walker
     make
 
