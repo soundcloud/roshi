@@ -81,7 +81,7 @@
                     <source>1.6</source>
                     <target>1.6</target>
                 </configuration>
-                <version>3.1</version>
+                <version>3.16.0</version>
             </plugin>
             <plugin>
               <groupId>org.apache.maven.plugins</groupId>
