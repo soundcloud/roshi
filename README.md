@@ -1,3 +1,9 @@
+> **⚠️ This project is no longer maintained.**
+>
+> Roshi is archived and will not receive further updates, including security fixes. It was built on Go 1.14 and dependencies that have since reached end of life, and `roshi-server` and `roshi-walker` expose Go's `net/http/pprof` profiling endpoints by default. Please do not run it in production as it is.
+>
+> The code remains available under the BSD 2-Clause license if you want to fork it.
+
 # roshi [![Build Status](https://travis-ci.org/soundcloud/roshi.png)](https://travis-ci.org/soundcloud/roshi) [![GoDoc](https://godoc.org/github.com/soundcloud/roshi?status.svg)](http://godoc.org/github.com/soundcloud/roshi)
 
 Roshi implements a time-series event storage via a LWW-element-set CRDT with
