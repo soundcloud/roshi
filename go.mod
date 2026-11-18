@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/garyburd/redigo v1.6.0
+	github.com/garyburd/redigo v1.6.4
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.7.4 // indirect
